@@ -119,6 +119,7 @@ function setStreak(s: number, prev: number) {
   pill.textContent = `x${s}`;
   const t = tier(s); blaze.dataset.tier = String(t);
   if (t > tier(prev)) blazeBody.animate([{ transform: 'translateY(0)' }, { transform: 'translateY(-14px)', offset: 0.4 }, { transform: 'translateY(0)' }], { duration: 380, easing: 'ease-out' });
+  if (t > tier(prev)) sfx.streak([0, 5, 10, 20][t]); // Blaze grows (called after the streak state changed)
 }
 /** Wrong tap: Blaze tilts his head; if a streak broke he also shrinks and sighs (eyes close). */
 function blazeWrong(sighToo: boolean) {
@@ -138,6 +139,7 @@ const timeLeft = (now: number) => (st.running ? st.left - (now - st.since) : st.
 function pause(now: number) { if (st.running) { st.left = timeLeft(now); st.running = false; } }
 function resume(now: number) { if (!st.running) { st.since = now; st.running = true; } }
 let lastTenth = -1, lastSegs = -1, lastLow: boolean | null = null, loop = 0;
+let lowFired = false, lastTickS = -1; // sound hooks: lowTime once at 10 s; tick(s) at 5..1 s
 function drawTimer(left: number) {
   const tenth = Math.max(0, Math.ceil(left / 100));
   if (tenth !== lastTenth) {
@@ -155,6 +157,11 @@ function tick() {
   const left = timeLeft(performance.now());
   drawTimer(left);
   if (left <= 0 && st.phase === 'play') { endRound(); loop = 0; return; }
+  if (st.phase !== 'replay') {
+    if (!lowFired && left <= 10000) { lowFired = true; sfx.lowTime(); }
+    const s = Math.ceil(left / 1000);
+    if (s !== lastTickS) { lastTickS = s; if (s >= 1 && s <= 5) sfx.tick(s); }
+  }
   loop = requestAnimationFrame(tick);
 }
 document.addEventListener('visibilitychange', () => {
@@ -191,7 +198,7 @@ function replay(s: Solved, chip: HTMLElement) {
   showPuzzle({ nums: s.nums, answer: s.c, a: s.a, b: s.b }, false);
   const iC = s.nums.indexOf(s.c);
   tiles[iC].classList.add('ok'); tiles[s.nums.indexOf(s.a)].classList.add('add'); tiles[s.nums.indexOf(s.b)].classList.add('add');
-  showSum(s); chip.classList.add('playing'); haptic(10);
+  showSum(s); chip.classList.add('playing'); haptic(10); sfx.replay();
   runTeach(s, iC, () => {
     chip.classList.remove('playing');
     showPuzzle(live, false); for (const i of bad) tiles[i].classList.add('bad');
@@ -216,7 +223,7 @@ function runTeach(s: Solved, iC: number, then: () => void) {
   requestAnimationFrame(() => {
     if (ended) return;
     real = teach({ layer: fxEl, tiles, centre: i => ({ x: cur[i].x, y: cur[i].y }), n: s.nums.length,
-      iS: s.nums.indexOf(s.a), iL: s.nums.indexOf(s.b), iC, onHop: blazeHop, onStage: g => { st.teachStage = g; } }, s.a, s.b);
+      iS: s.nums.indexOf(s.a), iL: s.nums.indexOf(s.b), iC, onHop: blazeHop, onStage: g => { st.teachStage = g; if (g === 'clear') showSum(null); } }, s.a, s.b);
     real.done.then(end);
   });
 }
@@ -246,8 +253,10 @@ function startRound() {
   scoreTxt.textContent = '0'; setStreak(0, 0); lastTenth = lastSegs = -1; lastLow = null; drawTimer(ROUND_MS);
   setMode('game'); show('play');
   layout(st.n, 0);
+  lowFired = false; lastTickS = -1;
   nextPuzzle();
   if (!loop) loop = requestAnimationFrame(tick);
+  sfx.roundStart();
 }
 function nextPuzzle() {
   st.badTiles.clear();
@@ -287,6 +296,7 @@ function onTap(i: number, now: number) {
     sfx.correct();
     const milestone = st.streak === 5 || st.streak === 10 || st.streak === 20;
     const newBest = st.prevBest > 0 && st.score === st.prevBest + 1;
+    if (newBest) sfx.newBest();
     if (wantsFull(milestone || newBest || hadMistake)) runTeach(solved, i, nextPuzzle);
     else { // quick: squish -> green bounce + the sum strip
       if (!reducedMotion()) tiles[i].animate([{ transform: 'scale(.92)' }, { transform: 'scale(1.12)', offset: 0.45 }, { transform: 'scale(1)' }], { duration: 320, easing: 'ease-out' });
@@ -300,6 +310,7 @@ function onTap(i: number, now: number) {
     // gentle wobble (starts from the tap squish)
     t.animate([{ transform: 'scale(.92)' }, { transform: 'translateX(-5px) scale(.97)' }, { transform: 'translateX(5px)' }, { transform: 'translateX(-3px)' }, { transform: 'translateX(0)' }], { duration: 260, easing: 'ease-out' });
     wrongCaption(v); sfx.wrong();
+    sfx.penalty();
     $('penalty').animate([{ opacity: 1, transform: 'translateY(0)' }, { opacity: 0, transform: 'translateY(-10px)' }], { duration: 700, easing: 'ease-out' });
     blazeWrong(st.streak > 0);
     const prev = st.streak; st.streak = 0; setStreak(0, prev);
@@ -338,6 +349,7 @@ function endRound() {
   nameIn.value = ''; renderSlots();
   fromGame = true;
   show('results');
+  sfx.timeUp();
 }
 const nameIn = $('nameIn') as HTMLInputElement, nameSave = $('nameSave') as HTMLButtonElement, nameClear = $('nameClear') as HTMLButtonElement;
 const nameSlots = [...document.querySelectorAll<HTMLElement>('.slots .nslot')];
@@ -394,16 +406,17 @@ press(picker, e => {
   const n = +b.dataset.n!; if (n === st.n) return;
   st.n = n; try { localStorage.setItem(LS.n, String(n)); } catch {}
   renderPicker(); showPuzzle(generate(n), false); layout(n, SLIDE_MS);
+  sfx.uiTap();
 });
 function toMenu() {
   cancelTimers(); st.run++; st.phase = 'menu'; st.running = false; fromGame = false; pending = null;
   setMode('menu'); show('play'); setStreak(0, 0);
   renderPicker(); showPuzzle(generate(st.n), false); layout(st.n, 0);
 }
-press($('mStart'), () => startRound());
-press($('mBoards'), () => { fromGame = false; showBoards(st.n); });
+press($('mStart'), () => { startRound(); sfx.uiTap(); });
+press($('mBoards'), () => { fromGame = false; showBoards(st.n); sfx.uiTap(); });
 const lab = initLab(press, () => toMenu());
-press($('mLab'), () => { show('lab'); lab.open(); });
+press($('mLab'), () => { show('lab'); lab.open(); sfx.uiTap(); });
 press($('gQuit'), quit);
 
 { const n = Number(localStorage.getItem(LS.n)); if ((NS as readonly number[]).includes(n)) st.n = n; }

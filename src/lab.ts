@@ -57,7 +57,7 @@ export function initLab(press: (el: Element, fn: (e: Event) => void) => void, on
   function register() {
     const a = Math.min(lab.v, lab.w - lab.v), f = foundSet();
     if (f.has(a)) return;
-    f.add(a); lab.data.found[lab.w] = [...f]; sfx.slide(a);
+    f.add(a); lab.data.found[lab.w] = [...f]; sfx.labPair(a);
     if (f.size === pairsFor(lab.w) && !lab.data.stars.includes(lab.w)) {
       lab.data.stars.push(lab.w); sfx.star(); haptic(30);
       const st = $('labStar'); st.classList.add('on');
@@ -70,7 +70,8 @@ export function initLab(press: (el: Element, fn: (e: Event) => void) => void, on
     chip?.animate([{ transform: 'scale(.6)', opacity: 0 }, { transform: 'scale(1)', opacity: 1 }], { duration: 220, easing: 'cubic-bezier(.34,1.56,.64,1)' });
   }
   slider.addEventListener('input', () => {
-    lab.v = +slider.value; renderSplit();
+    const v = +slider.value; if (v === lab.v) return; // once per step change
+    lab.v = v; renderSplit(); sfx.slide(v);
     clearTimeout(idle); idle = window.setTimeout(register, 350); // a bond counts once the slider rests on it
   });
   slider.addEventListener('change', () => { clearTimeout(idle); register(); });
@@ -83,6 +84,7 @@ export function initLab(press: (el: Element, fn: (e: Event) => void) => void, on
     const w = lab.w, pool = Array.from({ length: w - 1 }, (_, i) => i + 1).sort(() => Math.random() - 0.5);
     lab.quiz = { qs: pool.slice(0, QUIZ_LEN), i: 0, firstTry: 0, missed: false };
     quizEl.classList.remove('hidden'); $('labMain').classList.add('hidden'); askQuiz();
+    sfx.quizStart();
   }
   function askQuiz() {
     const q = lab.quiz!, w = lab.w;

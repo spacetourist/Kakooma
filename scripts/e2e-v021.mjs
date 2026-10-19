@@ -1,4 +1,4 @@
-// e2e v0.2.1+ (default expects v0.2.2, shots v022-*; EXPECT_VER / SHOT_TAG override): node scripts/e2e-v021.mjs [baseUrl]. GD review fixes: ~3 s solve, full-size ten-frames in rows, hoppers leave + keep colour, wrong caption in the sum strip, Bond Lab slider/ten-frames/quiz label. Plus all v0.2 checks. Teaching solve stages, timer pause, skip, chip replay, wrong caption, Bond Lab, reduced motion, FPS @4x CPU.
+// e2e v0.2.1+ (default expects v0.2.3, shots v023-*; EXPECT_VER / SHOT_TAG override): node scripts/e2e-v021.mjs [baseUrl]. GD review fixes: ~3 s solve, full-size ten-frames in rows, hoppers leave + keep colour, wrong caption in the sum strip, Bond Lab slider/ten-frames/quiz label. Plus all v0.2 checks. Teaching solve stages, timer pause, skip, chip replay, wrong caption, Bond Lab, reduced motion, FPS @4x CPU.
 import { createServer } from 'http';
 import { readFileSync, existsSync, statSync, mkdirSync, writeFileSync } from 'fs';
 import { join, extname } from 'path';
@@ -22,7 +22,7 @@ const errs = [], fails = [], log = [], perf = {};
 const watch = pg => { pg.on('pageerror', e => errs.push(e.message)); pg.on('console', m => { if (m.type() === 'error') errs.push(m.text()); }); };
 watch(page);
 const check = (c, msg) => { (c ? log : fails).push((c ? 'ok   ' : 'FAIL ') + msg); };
-const TAG = process.env.SHOT_TAG || 'v022', VER = process.env.EXPECT_VER || 'v0.2.2';
+const TAG = process.env.SHOT_TAG || 'v023', VER = process.env.EXPECT_VER || 'v0.2.3';
 const shot = n => page.screenshot({ path: `${SHOTS}${TAG}-${n}.png` });
 const kk = (f, a) => page.evaluate(f, a);
 const wait = ms => page.waitForTimeout(ms);
@@ -88,14 +88,22 @@ const fb = await kk(() => ({ op: Math.max(...[...document.querySelectorAll('#fx 
 check(fb.op < 0.01 && fb.lines === 1, 'frames, captions and counters fully faded (opacity 0) before the answer rises into the bond ' + JSON.stringify(fb));
 await wait(150); await shot('06-solve-4-handover');
 await stage('cheer');
-const overBond = await kk(() => ({ confetti: document.querySelectorAll('#fx .confetti').length, drawing: [...document.querySelectorAll('#fx .bondlines line, #fx .bnode, #fx .bondcap')].some(e => e.getAnimations().some(a => a.playState === 'running' && a.currentTime < (a.effect.getComputedTiming().endTime || 0) - 20)), hop: document.getElementById('blaze').getAnimations().length + document.getElementById('blazeBody').getAnimations().length }));
+const overBond = await kk(() => ({ confetti: document.querySelectorAll('#fx .confetti').length,
+  lines: [...document.querySelectorAll('#fx .bondlines line')].map(l => Math.round(parseFloat(getComputedStyle(l).strokeDashoffset))),
+  parts: [...document.querySelectorAll('#fx .bnode.p0, #fx .bnode.p1')].map(e => +(+getComputedStyle(e).opacity).toFixed(2)),
+  cap: +(+getComputedStyle(document.querySelector('#fx .bondcap')).opacity).toFixed(2),
+  hop: document.getElementById('blaze').getAnimations().length + document.getElementById('blazeBody').getAnimations().length }));
 await wait(280); await shot('07-solve-5-bond-cheer');
-check(overBond.confetti > 10 && overBond.drawing && overBond.hop > 0, 'confetti + Blaze hop start while the bond is still drawing ' + JSON.stringify(overBond));
+check(overBond.confetti > 10 && overBond.lines.every(x => x === 0) && overBond.parts.every(x => x === 1) && overBond.cap >= 0.98 && overBond.hop > 0, 'confetti + Blaze hop fire once the bond and caption are complete ' + JSON.stringify(overBond));
+await wait(1500);
+const hold = await kk(() => ({ stage: window.__kk.teachStage, phase: window.__kk.phase, cap: +getComputedStyle(document.querySelector('#fx .bondcap')).opacity, newConfetti: document.querySelectorAll('#fx .confetti').length }));
+check(hold.stage === 'cheer' && hold.phase === 'feedback' && hold.cap === 1, 'bond + caption still held 1.5 s after the caption lands ' + JSON.stringify(hold));
+await stage('clear', 4000);
+check((await kk(() => document.getElementById('sum').textContent)) === '?+?=?', 'clear: the bond fades and "? + ? = ?" comes back');
 check((await kk(() => [...document.querySelectorAll('#fx .bnode')].map(e => e.textContent).join())) === '19,7,12', 'bond: whole 19 on top, parts 7 and 12');
 check((await kk(() => document.querySelector('#fx .bondcap')?.textContent)) === '7 and 12 make 19', 'bond caption "7 and 12 make 19"');
-check((await kk(() => document.querySelectorAll('#fx .confetti').length)) > 10, 'confetti burst');
 await waitPlay(); const teachTotal = Date.now() - tapAt; perf.fullSolveMs = teachTotal;
-check(teachTotal < 3400, `full solve is ~3 s (${teachTotal} ms incl. test round-trips)`);
+check(teachTotal > 5000 && teachTotal < 6300, `full lesson is ~5-6 s (${teachTotal} ms incl. test round-trips)`);
 clearInterval(sampler); await wait(150);
 const during = samples.filter(s => s.phase === 'feedback');
 check(during.length > 15 && during.every(s => !s.running && s.left === during[0].left) && Math.abs(during[0].left - before.rem) < 600, `timer paused for the whole teaching solve (${during.length} samples over ${teachTotal} ms, stayed at ${Math.round(during[0]?.left)} ms)`);
@@ -280,22 +288,48 @@ const f1 = await fpsRun('cpu4x_7+12_N5', P([7, 9, 12, 19, 4], 7, 12), 5);
 const f2 = await fpsRun('cpu4x_28+29_N7', P([28, 29, 57, 2, 5, 13, 40], 28, 29), 7);
 check(f1.avgFps >= 55 && f2.avgFps >= 55, `FPS @4x CPU: ${JSON.stringify(perf)}`);
 
-// ---------- timeline frames of one full solve (7 + 12), like GD's review sheet ----------
-{
+// ---------- bond-stage timeline (every 300 ms) + sound-hook timing, 7 + 12 ----------
+async function lessonRun(onTap) {
   await page.close(); page = await browser.newPage(ctxOpts); watch(page);
   await boot(BASE + '?round=60&teach=full'); await tapEl('#picker [data-n="5"]'); await wait(300);
   await queue([P([7, 9, 12, 19, 4], 7, 12)]); await tapEl('#mStart'); await waitPlay(); await wait(400);
-  await kk(() => { window.__t0 = 0; document.getElementById('board').addEventListener('pointerdown', () => { window.__t0 = performance.now(); }, { capture: true, once: true }); });
+  await kk(() => {
+    window.__t0 = 0; window.__sfxLog = []; window.__stg = {};
+    document.getElementById('board').addEventListener('pointerdown', () => { window.__t0 = performance.now(); window.__sfxLog = []; }, { capture: true, once: true });
+    let last = ''; const f = () => { const g = window.__kk.phase === 'play' && window.__t0 ? 'next board' : window.__kk.teachStage; if (window.__t0 && g !== last) { last = g; window.__stg[g] = Math.round(performance.now() - window.__t0); } if (g !== 'next board') requestAnimationFrame(f); }; requestAnimationFrame(f);
+  });
   await tapTile(await answerIdx());
+  await onTap();
+  await waitPlay();
+  return kk(() => ({ stg: window.__stg, sfx: window.__sfxLog.map(([n, a, t]) => [n + (a.length ? `(${a.join(',')})` : ''), Math.round(t - window.__t0)]) }));
+}
+{
   const tl = [];
-  for (const t of [150, 500, 900, 1300, 1700, 2000, 2300, 2600, 2900, 3200]) {
-    const now = await kk(() => performance.now() - window.__t0); if (t > now) await wait(t - now);
-    const at = Math.round(await kk(() => performance.now() - window.__t0)), stg = await kk(() => window.__kk.phase === 'play' ? 'next board' : window.__kk.teachStage);
-    await page.screenshot({ path: `${SHOTS}${TAG}-tl-${String(t).padStart(4, '0')}.png` }); tl.push(`${t}:${at}:${stg}`);
-  }
-  perf.timeline = tl;
-  // dead-time check: with only the answer node showing (no frames, no bond) there is never a sampled moment
-  check(true, 'timeline frames ' + tl.join(' '));
+  const r1 = await lessonRun(async () => {
+    await stage('absorb'); const ta = await kk(() => performance.now() - window.__t0);
+    for (let t = Math.round(ta + 220); ; t += 300) { // from the moment the answer starts to rise
+      const now = await kk(() => performance.now() - window.__t0); if (t > now) await wait(t - now);
+      const ph = await kk(() => window.__kk.phase); if (ph === 'play') { await page.screenshot({ path: `${SHOTS}${TAG}-bond-t${t}-next-board.png` }); tl.push(`${t}:next board`); break; }
+      const stg = await kk(() => window.__kk.teachStage);
+      await page.screenshot({ path: `${SHOTS}${TAG}-bond-t${t}.png` }); tl.push(`${t}:${stg}`);
+    }
+  });
+  perf.bondTimeline = tl; perf.stages = r1.stg; perf.sfx = r1.sfx;
+  check(tl.length >= 12, 'bond-stage timeline frames every 300 ms: ' + tl.join(' '));
+  const sx = Object.fromEntries(r1.sfx.map(([n, t]) => [n, t]));
+  const counts = r1.sfx.filter(([n]) => n.startsWith('count('));
+  check(counts.length === 19 && counts.every(([n], i) => n === `count(${i})`), `count(i) fires once per counter as it lands: ${counts.length}x, ${counts[0]?.[1]}-${counts.at(-1)?.[1]} ms`);
+  const order = ['bondPart(0)', 'bondPart(1)', 'caption', 'cheer', 'pulse(0)', 'pulse(1)', 'pulse(2)'].map(n => sx[n]);
+  check(order.every((t, i) => t != null && (i === 0 || t >= order[i - 1])) && sx.caption === sx.cheer, 'bond hooks in order: bondPart(0) < bondPart(1) < caption = cheer < pulse(0) < pulse(1) < pulse(2) ' + JSON.stringify(order));
+  const build = sx['bondPart(1)'] + 220 - r1.stg.bond, read = r1.stg.clear - (sx.caption - 260);
+  check(build >= 700 && build <= 950 && read >= 2400 && read <= 2650, `bond timing: build ${build} ms (~0.8 s), read ${read} ms (2.5 s), clear ${r1.stg['next board'] - r1.stg.clear} ms (0.3 s)`);
+  // confetti peak: one burst, widest spread ~450 ms after it fires
+  await lessonRun(async () => {
+    await stage('cheer'); await wait(430); await shot('confetti-peak');
+    const c = await kk(() => document.querySelectorAll('#fx .confetti').length); await wait(800);
+    const c2 = await kk(() => document.querySelectorAll('#fx .confetti').length);
+    check(c === 30 && c2 <= 30, `single confetti burst of 30 (no second burst): ${c} then ${c2}`);
+  });
 }
 
 // ---------- reduced motion ----------

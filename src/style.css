@@ -162,6 +162,7 @@ button { font: inherit; color: inherit; border: 0; background: none; padding: 0;
 .ctr.p0 { background: var(--lblue); } .ctr.p1 { background: var(--blue); }
 .fx .tcap { left: 0; right: 0; text-align: center; font: 700 26px/1 var(--f-display); color: var(--ink); font-variant-numeric: tabular-nums; }
 .fx .bondcap { font-size: 24px; }
+.bondcap .w { display: inline-block; } .bondcap .p0 { color: var(--lblue-ink); } .bondcap .p1 { color: var(--blue); } .bondcap .whole { color: var(--green); }
 .bnode { position: absolute; border-radius: 50%; display: grid; place-items: center; color: #fff; font: 700 30px/1 var(--f-display); box-shadow: var(--shadow); }
 .bnode.whole { background: var(--green); font-size: 36px; } .bnode.p0 { background: var(--lblue); } .bnode.p1 { background: var(--blue); }
 .bondlines { width: 100%; height: 100%; overflow: visible; }
