@@ -224,16 +224,15 @@ function runTeach(s: Solved, iC: number, then: () => void) {
 skipper.addEventListener('pointerdown', e => { e.preventDefault(); st.teach?.skip(); });
 skipper.addEventListener('click', e => { if (e.detail === 0) st.teach?.skip(); });
 function wantsFull(extra: boolean) { if (TEACH === 'quick') return false; if (TEACH === 'full') return true; return st.score <= 3 || extra; }
-let capEl: HTMLElement | null = null;
-/** Wrong tap: a small caption next to the tile explaining why. */
-function wrongCaption(i: number, v: number) {
-  capEl?.remove();
-  const c = document.createElement('div'); c.className = 'wcap'; c.textContent = `${v} can't be made from two of these`;
-  // Sit in the gap above the sum strip so it never covers a tile the player still needs.
-  c.style.left = '50%'; c.style.top = board.clientHeight - 10 + 'px'; void i;
-  fxEl.appendChild(c); capEl = c;
-  c.animate([{ opacity: 0, translate: '0 -4px' }, { opacity: 1, translate: '0 0', offset: 0.1 }, { opacity: 1, offset: 0.85 }, { opacity: 0 }], { duration: 2000, fill: 'both' }).onfinish = () => { c.remove(); if (capEl === c) capEl = null; };
+let capTimer = 0;
+/** Wrong tap (v0.2.1): the reason replaces the hint/placeholder inside the sum strip for 2 s, then the strip restores. */
+function wrongCaption(v: number) {
+  clearTimeout(capTimer);
+  sumEl.className = 'sum wrong'; sumEl.textContent = `${v} can't be made from two of these`;
+  if (!reducedMotion()) sumEl.animate([{ opacity: 0.2, translate: '0 3px' }, { opacity: 1, translate: '0 0' }], { duration: 180, easing: 'ease-out' });
+  capTimer = window.setTimeout(clearWrongCaption, 2000);
 }
+function clearWrongCaption() { clearTimeout(capTimer); if (sumEl.classList.contains('wrong')) showSum(null); }
 
 // ---------- round ----------
 const play = $('play');
@@ -275,7 +274,7 @@ function onTap(i: number, now: number) {
   if (v === p.answer) {
     pause(now); st.phase = 'feedback';
     const hadMistake = st.badTiles.size > 0;
-    capEl?.remove(); capEl = null;
+    clearTimeout(capTimer);
     // the solved board shows only the two blue parts and the green answer: clear any wrong (coral) state first
     for (const t of tiles) { t.classList.remove('bad'); for (const a of t.getAnimations()) a.cancel(); }
     tiles[i].classList.add('ok');
@@ -300,7 +299,7 @@ function onTap(i: number, now: number) {
     const t = tiles[i]; t.classList.add('bad');
     // gentle wobble (starts from the tap squish)
     t.animate([{ transform: 'scale(.92)' }, { transform: 'translateX(-5px) scale(.97)' }, { transform: 'translateX(5px)' }, { transform: 'translateX(-3px)' }, { transform: 'translateX(0)' }], { duration: 260, easing: 'ease-out' });
-    wrongCaption(i, v); sfx.wrong();
+    wrongCaption(v); sfx.wrong();
     $('penalty').animate([{ opacity: 1, transform: 'translateY(0)' }, { opacity: 0, transform: 'translateY(-10px)' }], { duration: 700, easing: 'ease-out' });
     blazeWrong(st.streak > 0);
     const prev = st.streak; st.streak = 0; setStreak(0, prev);

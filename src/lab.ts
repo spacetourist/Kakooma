@@ -31,15 +31,23 @@ export function initLab(press: (el: Element, fn: (e: Event) => void) => void, on
     const w = lab.w, v = lab.v, b = w - v;
     nodes.w.textContent = String(w); nodes.a.textContent = String(v); nodes.b.textContent = String(b);
     eq.innerHTML = `<b>${w}</b> = <span class="p0">${v}</span> + <span class="p1">${b}</span>`;
-    const g = (n: number, cls: string) => `<div class="grp">${`<i class="ctr ${cls}"></i>`.repeat(n)}</div>`;
-    dots.innerHTML = g(v, 'p0') + '<span class="bar"></span>' + g(b, 'p1');
+    // counters in ten-frames, like the game: the first part fills from the start (light), the rest is the second part
+    let html = '';
+    for (let f = 0; f * 10 < w; f++) {
+      let cells = '';
+      for (let i = f * 10; i < f * 10 + 10; i++) cells += i < w ? `<i><span class="ctr ${i < v ? 'p0' : 'p1'}"></span></i>` : '<i></i>';
+      html += `<div class="tf">${cells}</div>`;
+    }
+    dots.innerHTML = html;
+    slider.style.setProperty('--pct', `calc(19px + (100% - 38px) * ${((v - 1) / Math.max(1, w - 2)).toFixed(4)})`);
   }
   function renderFound() {
     const f = [...foundSet()].sort((x, y) => x - y);
     found.innerHTML = f.map(a => `<span class="chip" data-a="${a}">${a} + ${lab.w - a}</span>`).join('') || '<span class="none">Slide to find a bond</span>';
     $('labCount').textContent = `${f.length} / ${pairsFor(lab.w)}`;
     const starred = lab.data.stars.includes(lab.w), q = $('labQuizBtn') as HTMLButtonElement;
-    q.disabled = !starred; q.textContent = starred ? 'Missing part quiz' : 'Find every bond for the quiz';
+    const more = pairsFor(lab.w) - f.length;
+    q.disabled = !starred; q.textContent = starred ? 'Quiz: missing part' : `Quiz: find ${more} more`;
     $('labStar').classList.toggle('on', starred);
   }
   function setWhole(w: number) {

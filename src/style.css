@@ -73,6 +73,7 @@ button { font: inherit; color: inherit; border: 0; background: none; padding: 0;
 .sum .p { color: var(--blue); } .sum .a { color: var(--green); }
 .sum.hint { font: 700 15px/1.3 var(--f-ui); color: var(--muted); }
 .sum.ph { color: #c8cddb; }
+.sum.wrong { white-space: normal; padding: 0 16px; text-align: center; font: 800 16px/1.25 var(--f-ui); color: var(--ink); box-shadow: 0 0 0 2px rgba(255, 93, 93, .35), var(--shadow); }
 .sum.pop > * { display: inline-block; animation: sumPop .22s cubic-bezier(.34, 1.56, .64, 1) backwards; }
 .sum.pop > :nth-child(2) { animation-delay: .02s; } .sum.pop > :nth-child(3) { animation-delay: .04s; } .sum.pop > :nth-child(4) { animation-delay: .06s; } .sum.pop > :nth-child(5) { animation-delay: .08s; }
 @keyframes sumPop { from { opacity: .2; transform: scale(.6); } to { opacity: 1; transform: none; } }
@@ -155,7 +156,7 @@ button { font: inherit; color: inherit; border: 0; background: none; padding: 0;
 .confetti { width: 8px; height: 12px; border-radius: 2px; will-change: transform, opacity; }
 .tf { display: grid; grid-template-columns: repeat(5, var(--cs)); gap: var(--g); padding: var(--p); background: var(--card); border-radius: 10px; box-shadow: var(--shadow); transition: box-shadow .2s; }
 .tf i { width: var(--cs); height: var(--cs); border-radius: 5px; border: 1.5px solid var(--line); }
-.tf.mini { border-radius: 6px; } .tf.mini i { border-radius: 2px; border-width: 1px; }
+
 .tf.ten { box-shadow: 0 0 0 3px var(--green), var(--shadow); }
 .ctr { border-radius: 50%; will-change: transform, opacity; }
 .ctr.p0 { background: var(--lblue); } .ctr.p1 { background: var(--blue); }
@@ -167,7 +168,6 @@ button { font: inherit; color: inherit; border: 0; background: none; padding: 0;
 .bondlines line, .labbond line { stroke: var(--line); stroke-width: 4; stroke-linecap: round; }
 .fx .skiphint { top: auto; bottom: 0; left: 0; right: 0; text-align: center; font: 800 11px/1 var(--f-ui); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
 .skipper { position: fixed; inset: 0; z-index: 40; background: transparent; touch-action: none; }
-.wcap { transform: translateX(-50%); white-space: nowrap; z-index: 4; padding: 6px 14px; border-radius: 12px; background: var(--ink); color: #fff; text-align: center; font: 700 13px/1.25 var(--f-ui); box-shadow: var(--shadow); }
 .tray-cap { flex: 0 0 auto; margin-top: 2px; text-align: center; font: 700 13px/1.2 var(--f-ui); color: var(--muted); }
 button.chip { cursor: pointer; touch-action: manipulation; }
 .chip.playing { box-shadow: 0 0 0 2px var(--blue); }
@@ -189,11 +189,22 @@ button.chip { cursor: pointer; touch-action: manipulation; }
 .labstar.on { color: var(--gold); }
 .labeq { margin: 8px 0 6px; text-align: center; font: 700 34px/1 var(--f-display); font-variant-numeric: tabular-nums; }
 .labeq b, .labq b { color: var(--green); } .labeq .p0, .labq .p0 { color: var(--lblue-ink); } .labeq .p1, .labq .p1 { color: var(--blue); }
-.labdots { display: flex; justify-content: center; align-items: flex-start; gap: 12px; min-height: 88px; padding: 4px 0; }
-.labdots .grp { display: grid; grid-template-columns: repeat(5, 16px); gap: 4px; align-content: start; }
-.labdots .ctr { display: block; width: 16px; height: 16px; }
-.labdots .bar { width: 3px; align-self: stretch; background: var(--ink); border-radius: 2px; opacity: .25; }
-#labSlider { width: 100%; height: 40px; margin: 4px 0 0; accent-color: var(--blue); touch-action: pan-y; }
+.labdots { display: flex; justify-content: center; align-items: flex-start; gap: 10px; min-height: 64px; padding: 6px 0 2px; }
+.labdots .tf { --cs: 22px; --g: 3px; --p: 5px; }
+.labdots .tf i { display: grid; place-items: center; }
+.labdots .ctr { display: block; width: calc(var(--cs) - 5px); height: calc(var(--cs) - 5px); }
+/* Slider (v0.2.1): fat round handle, track split in the two part colours, no black focus box. */
+#labSlider { -webkit-appearance: none; appearance: none; display: block; width: 100%; height: 48px; margin: 4px 0 0; background: transparent; outline: none; touch-action: pan-y; cursor: pointer; --pct: 50%; }
+#labSlider:focus { outline: none; }
+#labSlider::-webkit-slider-runnable-track { height: 10px; border-radius: 5px; background: linear-gradient(90deg, var(--lblue) var(--pct), var(--blue) var(--pct)); }
+#labSlider::-moz-range-track { height: 10px; border-radius: 5px; background: linear-gradient(90deg, var(--lblue) var(--pct), var(--blue) var(--pct)); }
+#labSlider::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 38px; height: 38px; margin-top: -14px; border-radius: 50%; background: #fff; border: 4px solid var(--blue); box-shadow: 0 2px 8px rgba(29, 35, 64, .22); transition: box-shadow .15s; }
+#labSlider::-moz-range-thumb { width: 30px; height: 30px; border-radius: 50%; background: #fff; border: 4px solid var(--blue); box-shadow: 0 2px 8px rgba(29, 35, 64, .22); }
+#labSlider:active::-webkit-slider-thumb { box-shadow: 0 0 0 8px rgba(58, 123, 255, .14), 0 2px 8px rgba(29, 35, 64, .22); }
+#labSlider:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 5px rgba(58, 123, 255, .32), 0 2px 8px rgba(29, 35, 64, .22); }
+#labSlider:focus-visible::-moz-range-thumb { box-shadow: 0 0 0 5px rgba(58, 123, 255, .32); }
+#lab .foot.pinned .btn { white-space: nowrap; padding: 0 12px; font-size: 15px; letter-spacing: .04em; }
+#lab .foot.pinned #labMenu { flex: 0 0 104px; }
 .lab-found-h { margin: 16px 0 8px; }
 .labfound { display: flex; flex-wrap: wrap; gap: 8px; }
 .labfound .none { color: var(--muted); font: 700 14px/1.3 var(--f-ui); }

@@ -10,18 +10,37 @@ describe('planTeach (make ten)', () => {
   });
   it('under ten: one frame, one caption', () => {
     const p = planTeach(3, 4);
-    expect(p.boxes).toEqual([{ row: 0, kind: 'frame' }]); expect(p.captions).toEqual(['3 + 4 = 7']); expect(p.k).toBe(0);
+    expect(p.boxes).toEqual([{ row: 0 }]); expect(p.captions).toEqual(['3 + 4 = 7']); expect(p.k).toBe(0);
   });
   it('big sums: 17 + 25 bridges 17 -> 20', () => { expect(planTeach(17, 25).captions).toEqual(['17 + 3 = 20', '20 + 22 = 42']); });
   it('both whole tens: no bridge', () => { expect(planTeach(10, 20).captions).toEqual(['10 + 20 = 30']); });
   it('10 + 13 bridges the 13', () => { expect(planTeach(10, 13).captions).toEqual(['13 + 7 = 20', '20 + 3 = 23']); });
+  it('one row when 3 frames or fewer: 7 + 12 is [7][10 -> 7][2]', () => {
+    const p = planTeach(7, 12);
+    expect(p.boxes).toEqual([{ row: 0 }, { row: 0 }, { row: 0 }]);
+    expect(p.counters.filter(c => c.slot.box === 1)).toHaveLength(10);
+    expect(p.counters.filter(c => c.hop).every(c => c.slot.box === 1 && c.hop!.box === 0 && c.part === 1)).toBe(true);
+  });
+  it('more than 3 tens stack into rows of full-size frames: 28 + 29', () => {
+    const p = planTeach(28, 29);
+    expect(p.boxes.length).toBe(6); expect(p.boxes.filter(b => b.row === 0)).toHaveLength(3); expect(p.boxes.filter(b => b.row === 1)).toHaveLength(3);
+  });
+  it('big wholes beyond the game range still wrap in rows of 3', () => {
+    const p = planTeach(40, 45);
+    for (const b of p.boxes) expect(b.row).toBeGreaterThanOrEqual(0);
+    const rows = Math.max(...p.boxes.map(b => b.row)) + 1;
+    for (let r = 0; r < rows; r++) expect(p.boxes.filter(b => b.row === r).length).toBeLessThanOrEqual(3);
+  });
   it('every pair 1..29: counts, captions, slots and frame limits are consistent', () => {
-    for (let a = 1; a <= 29; a++) for (let b = a + 1; b <= 29; b++) {
+    for (let a = 1; a <= 29; a++) for (let b = a + 1; b <= 30; b++) {
       const p = planTeach(a, b), c = a + b;
       expect(p.counters).toHaveLength(c);
       expect(p.counters.filter(x => x.part === 0)).toHaveLength(Math.min(a, b));
-      expect(p.boxes.filter(x => x.kind === 'frame').length).toBeLessThanOrEqual(3);
-      expect(p.boxes.length).toBeLessThanOrEqual(6);
+      // every frame is full size (no minis): the frame count is exactly what the counters need
+      expect(p.boxes.length).toBeLessThanOrEqual(Math.ceil(a / 10) + Math.ceil(b / 10) + 1);
+      expect(p.boxes.every(x => x.row >= 0)).toBe(true);
+      // one colour per part all the way through: a counter's part never changes and the counts per part are exact
+      expect(p.counters.filter(x => x.part === 1)).toHaveLength(Math.max(a, b));
       for (const cap of p.captions) { const [x, y, z] = evalCap(cap); expect(x + y).toBe(z); }
       expect(evalCap(p.captions[p.captions.length - 1])[2]).toBe(c);
       // final positions (after hops) never collide and stay inside a ten
@@ -31,9 +50,18 @@ describe('planTeach (make ten)', () => {
       if (p.k) { // after the hop the bridged frame holds exactly ten
         const tgt = p.counters.find(x => x.hop)!.hop!.box;
         expect(final.filter(s => s.box === tgt)).toHaveLength(10);
+        // hoppers leave their source frame: they are exactly k, all from one frame, and nothing stays behind in their cells
+        const hops = p.counters.filter(x => x.hop);
+        expect(hops).toHaveLength(p.k);
+        expect(new Set(hops.map(x => x.slot.box)).size).toBe(1);
+        const src = hops[0].slot.box;
+        expect(final.filter(s => s.box === src)).toHaveLength(p.counters.filter(x => x.slot.box === src).length - p.k);
+        expect(hops.every(x => x.part !== p.counters.find(y => y.slot.box === tgt)!.part)).toBe(true); // hoppers keep their own colour in the new ten
       }
-      // per row, at most 3 boxes (fits the board width)
-      for (const r of [0, 1]) expect(p.boxes.filter(x => x.row === r).length).toBeLessThanOrEqual(3);
+      // per row, at most 3 frames (fits the board width); 3 or fewer frames share one row
+      const rows = Math.max(...p.boxes.map(x => x.row)) + 1;
+      for (let r = 0; r < rows; r++) { const n = p.boxes.filter(x => x.row === r).length; expect(n).toBeGreaterThan(0); expect(n).toBeLessThanOrEqual(3); }
+      if (p.boxes.length <= 3) expect(rows).toBe(1);
     }
   });
 });

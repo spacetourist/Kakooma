@@ -63,7 +63,10 @@ check(g0.quitIn && g0.trayAboveQuit && !g0.pageScroll, 'Quit on screen, tray abo
 await shot('hint-first');
 await tapTile(await wrongIdx()); await wait(120);
 check((await kk(() => document.querySelectorAll('.tile.bad').length)) === 1, 'wrong tap: coral ring on the tapped tile');
-check((await sumState()).hint, 'hint still shown after a wrong tap on the first puzzle');
+// v0.2.1: the wrong-tap reason replaces the hint inside the strip for 2 s, then the hint comes back
+check(await kk(() => document.getElementById('sum').classList.contains('wrong')), 'wrong tap: reason shown inside the sum strip');
+await wait(2100);
+check((await sumState()).hint, 'hint back in the strip after the wrong-tap caption');
 await shot('wrong');
 await wait(200); await tapTile(await answerIdx()); await wait(170);
 s = await sumState();
