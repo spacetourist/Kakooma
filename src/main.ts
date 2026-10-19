@@ -155,11 +155,11 @@ document.addEventListener('visibilitychange', () => {
 
 // ---------- sum strip + solved tray ----------
 const sumEl = $('sum'), tray = $('tray');
-/** Strip under the board: the hint on a round's first puzzle, the sum (parts blue, answer green) during feedback, else empty. */
+/** Strip under the board: the hint on a round's first puzzle, the sum (parts blue, answer green) during feedback, else a grey "? + ? = ?" placeholder. */
 function showSum(s: Solved | null) {
   if (s) { sumEl.className = 'sum pop'; sumEl.innerHTML = `<span class="p">${s.a}</span><span>+</span><span class="p">${s.b}</span><span>=</span><span class="a">${s.c}</span>`; }
-  else if (!st.solved.length && !st.miss) { sumEl.className = 'sum hint'; sumEl.textContent = 'Find the number made by two others'; }
-  else { sumEl.className = 'sum'; sumEl.textContent = ''; }
+  else if (!st.solved.length) { sumEl.className = 'sum hint'; sumEl.textContent = 'Find the number made by two others'; }
+  else { sumEl.className = 'sum ph'; sumEl.innerHTML = '<span>?</span><span>+</span><span>?</span><span>=</span><span>?</span>'; }
 }
 let newestChip: HTMLElement | null = null;
 /** Newest chip first (green); older chips neutral. data-k indexes st.solved for the v0.2 replay. */

@@ -1,0 +1,42 @@
+// v0.1.2: placeholder "? + ? = ?" between puzzles and the pop on solve. node scripts/shots-v012.mjs <url> [prefix]
+const { chromium } = await import('/tmp/pw/node_modules/playwright-core/index.mjs');
+const BASE = process.argv[2], PRE = process.argv[3] || 'v012-';
+const SHOTS = new URL('../shots/', import.meta.url).pathname;
+const b = await chromium.launch({ executablePath: '/usr/bin/google-chrome' });
+const page = await b.newPage({ viewport: { width: 412, height: 915 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
+const errs = [], fails = [], log = []; page.on('pageerror', e => errs.push(e.message));
+const check = (c, m) => (c ? log : fails).push((c ? 'ok   ' : 'FAIL ') + m);
+const kk = f => page.evaluate(f), wait = ms => page.waitForTimeout(ms);
+const tap = async sel => { const bb = await page.locator(sel).first().boundingBox(); await page.touchscreen.tap(bb.x + bb.width / 2, bb.y + bb.height / 2); };
+const ans = () => kk(() => window.__kk.puzzle.nums.indexOf(window.__kk.puzzle.answer));
+const waitPlay = () => page.waitForFunction(() => window.__kk.phase === 'play');
+const strip = () => kk(() => { const s = document.getElementById('sum'), r = s.getBoundingClientRect(), cs = getComputedStyle(s);
+  return { cls: s.className, text: s.textContent, h: r.height, y: r.y, font: cs.fontFamily.split(',')[0], size: cs.fontSize, color: cs.color,
+    tiles: [...document.querySelectorAll('.slot')].map(e => e.style.transform).join('|'), score: document.querySelector('.below.game-only .lblrow').getBoundingClientRect().y }; });
+await page.goto(BASE + '?round=60'); await kk(() => localStorage.clear()); await page.reload();
+await page.waitForFunction(() => document.fonts.status === 'loaded');
+check((await page.textContent('#verLabel')) === 'v0.1.2', 'menu shows ' + await page.textContent('#verLabel'));
+await tap('#mStart'); await waitPlay(); await wait(250);
+const h = await strip(); check(h.cls.includes('hint') && h.text === 'Find the number made by two others', 'first puzzle: hint in strip');
+await tap(`.tile[data-i="${await ans()}"]`); await wait(60);
+const pop = await strip();
+check(pop.cls.includes('pop') && /^\d+\+\d+=\d+$/.test(pop.text), 'solve: numbers pop in ' + pop.text);
+const mid = await kk(() => getComputedStyle(document.querySelector('#sum .a')).transform);
+check(mid !== 'none', 'pop is mid-scale at 60 ms (' + mid + ')');
+await page.screenshot({ path: `${SHOTS}${PRE}pop.png` });
+await wait(250); await page.screenshot({ path: `${SHOTS}${PRE}solved.png` });
+await waitPlay(); await wait(250);
+const ph = await strip();
+check(ph.cls.includes('ph') && ph.text === '?+?=?', 'between puzzles: ? + ? = ? placeholder');
+check(ph.font === pop.font && ph.size === pop.size, `placeholder same font/size as sum (${ph.font} ${ph.size})`);
+check(ph.h === h.h && ph.h === pop.h && ph.y === pop.y && ph.score === pop.score && ph.score === h.score && ph.tiles === pop.tiles, 'no layout shift across hint / sum / placeholder');
+check(ph.color !== pop.color, 'placeholder light grey ' + ph.color);
+await page.screenshot({ path: `${SHOTS}${PRE}placeholder.png` });
+// placeholder persists for later puzzles; wrong tap does not bring the hint back
+const wrong = await kk(() => { const p = window.__kk.puzzle, a = p.nums.indexOf(p.answer); return a === 0 ? 1 : 0; });
+await tap(`.tile[data-i="${wrong}"]`); await wait(100);
+check((await strip()).text === '?+?=?', 'placeholder stays after a wrong tap');
+await tap(`.tile[data-i="${await ans()}"]`); await waitPlay(); await wait(100);
+check((await strip()).text === '?+?=?', 'placeholder on the third puzzle');
+console.log(log.join('\n')); console.log(fails.length ? fails.join('\n') : 'ALL CHECKS PASSED'); console.log('page errors:', errs.length ? errs : 'none');
+await b.close(); process.exit(fails.length || errs.length ? 1 : 0);

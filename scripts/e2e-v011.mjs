@@ -47,7 +47,7 @@ const centreClear = () => kk(() => { const b = document.getElementById('board');
 
 await page.goto(BASE + '?round=45'); await kk(() => localStorage.clear()); await page.reload();
 await page.waitForFunction(() => document.fonts.status === 'loaded');
-check((await page.textContent('#verLabel')) === 'v0.1.1', 'menu shows v0.1.1: ' + await page.textContent('#verLabel'));
+check((await page.textContent('#verLabel')) === (process.env.EXPECT_VER || 'v0.1.1'), 'menu shows v0.1.1: ' + await page.textContent('#verLabel'));
 await tapEl('#picker [data-n="5"]'); await wait(400);
 await shot('menu');
 
@@ -77,7 +77,7 @@ check(g.chips === 1 && g.news === 1 && g.firstNew, 'tray: first chip added, gree
 await shot('wrong-then-correct');
 await waitPlay(); await wait(60);
 s = await sumState();
-check(!s.hint && s.text === '', 'second puzzle: no hint (strip empty) ' + JSON.stringify(s.text));
+check(!s.hint && s.text === '?+?=?', 'second puzzle: no hint, placeholder ? + ? = ? ' + JSON.stringify(s.text));
 await shot('second-puzzle-no-hint');
 
 // ---------- 18 more solves: tray fills, nothing moves ----------
