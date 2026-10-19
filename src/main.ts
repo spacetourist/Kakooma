@@ -310,7 +310,7 @@ function onTap(i: number, now: number) {
     // gentle wobble (starts from the tap squish)
     t.animate([{ transform: 'scale(.92)' }, { transform: 'translateX(-5px) scale(.97)' }, { transform: 'translateX(5px)' }, { transform: 'translateX(-3px)' }, { transform: 'translateX(0)' }], { duration: 260, easing: 'ease-out' });
     wrongCaption(v); sfx.wrong();
-    sfx.penalty();
+    sfx.penalty({ delay: 0.15 }); // the audio pack sits the time-lost tick just under wrong()
     $('penalty').animate([{ opacity: 1, transform: 'translateY(0)' }, { opacity: 0, transform: 'translateY(-10px)' }], { duration: 700, easing: 'ease-out' });
     blazeWrong(st.streak > 0);
     const prev = st.streak; st.streak = 0; setStreak(0, prev);

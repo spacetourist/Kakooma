@@ -60,7 +60,7 @@ for (const [name, n, p] of sums.filter(s => !process.env.ONLY || s[0] === proces
     await tap(`.tile[data-i="${i}"]`);
     const now = await page.evaluate(() => performance.now() - window.__mon.t0); if (off > now) await page.waitForTimeout(off - now);
     const at = Math.round(await page.evaluate(() => performance.now() - window.__mon.t0));
-    await page.screenshot({ path: `${SHOTS}v022-handover${process.env.REDUCED ? '-reduced' : ''}-${name.replace('+', '-')}-${off}.png` });
+    await page.screenshot({ path: `${SHOTS}${process.env.SHOT_TAG || "v023"}-handover${process.env.REDUCED ? '-reduced' : ''}-${name.replace('+', '-')}-${off}.png` });
     await page.waitForFunction(() => window.__kk.phase === 'play' && window.__mon.done, null, { timeout: 8000 });
     const m = await page.evaluate(() => window.__mon);
     stats.frames += m.frames; stats.overlap.push(...m.bad.filter(b => b.includes('overlap'))); stats.outside.push(...m.bad.filter(b => b.includes('outside')));

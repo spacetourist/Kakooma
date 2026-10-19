@@ -5,7 +5,7 @@
  */
 import { planTeach, type Plan } from './plan';
 import { confetti, reducedMotion } from './fx';
-import { sfx } from './sfx';
+import { sfx, stopAll } from './sfx';
 
 export interface TeachCtx {
   layer: HTMLElement;            // overlay inside the board (board coordinates)
@@ -22,16 +22,17 @@ const T = (x: number, y: number, s = 1) => `translate(${x.toFixed(1)}px,${y.toFi
 export function teach(ctx: TeachCtx, a: number, b: number): TeachRun {
   const plan = planTeach(a, b), reduced = reducedMotion();
   const layer = ctx.layer, w = layer.clientWidth, h = layer.clientHeight;
-  const anims: Animation[] = [], els: HTMLElement[] = [], timers: number[] = [];
+  const anims: Animation[] = [], els: HTMLElement[] = [];
   let over = false, resolve!: () => void;
   const done = new Promise<void>(r => (resolve = r));
   const add = <E extends HTMLElement | SVGElement>(el: E) => { layer.appendChild(el); els.push(el as any); return el; };
   const anim = (el: Element, kf: Keyframe[], o: KeyframeAnimationOptions) => { const x = el.animate(kf, o); anims.push(x); return x; };
-  /** fire a sound hook ms from now, in step with an animation's delay (cancelled by skip) */
-  const at = (ms: number, fn: () => void) => { timers.push(window.setTimeout(() => { if (!over) fn(); }, Math.max(0, ms))); };
+  /** sound-hook options: fire `ms` after now on the audio clock (the hook is called in the same tick as its animation) */
+  const inMs = (ms: number) => ({ delay: Math.max(0, ms) / 1000 });
   const wait = (ms: number) => new Promise<boolean>(r => setTimeout(() => r(over), ms));
   const dim = (idx: number[] | 'all' | 'none') => ctx.tiles.forEach((t, i) => t.classList.toggle('dim', idx === 'all' || (Array.isArray(idx) && idx.includes(i))));
-  const finish = () => { if (over) return; over = true; for (const t of timers) clearTimeout(t); for (const x of anims) x.cancel(); for (const e of els) e.remove(); dim('none'); resolve(); };
+  /** cut = the lesson was cut short (skip, quit, round end): stop any sounds already scheduled on the audio clock */
+  const finish = (cut = true) => { if (over) return; over = true; if (cut) stopAll(); for (const x of anims) x.cancel(); for (const e of els) e.remove(); dim('none'); resolve(); };
 
   // ---------- geometry: every frame full size; up to 3 per row, rows stack ----------
   const nRows = Math.max(...plan.boxes.map(bx => bx.row)) + 1;
@@ -99,7 +100,7 @@ export function teach(ctx: TeachCtx, a: number, b: number): TeachRun {
     let flyEnd = 0;
     plan.counters.forEach((c, j) => {
       const t = cell(c.slot), s = from[c.part];
-      if (reduced) { anim(dots[j], [{ transform: T(t.x, t.y), opacity: 0 }, { transform: T(t.x, t.y), opacity: 1 }], { duration: 200, fill: 'both' }); at(200, () => sfx.count(j)); return; }
+      if (reduced) { anim(dots[j], [{ transform: T(t.x, t.y), opacity: 0 }, { transform: T(t.x, t.y), opacity: 1 }], { duration: 200, fill: 'both' }); sfx.count(j, inMs(200)); return; }
       const ang = Math.random() * Math.PI * 2, r = 20 + Math.random() * 18, bx = s.x + Math.cos(ang) * r, by = s.y + Math.sin(ang) * r;
       const mx = (bx + t.x) / 2 + (c.part ? 30 : -30), my = (by + t.y) / 2 - 40;
       const delay = j * stag;
@@ -109,7 +110,7 @@ export function teach(ctx: TeachCtx, a: number, b: number): TeachRun {
         { transform: T(mx, my, 1), opacity: 1, offset: 0.6 },
         { transform: T(t.x, t.y), opacity: 1 },
       ], { duration: FLY, delay, easing: 'cubic-bezier(.3,.7,.4,1)', fill: 'both' });
-      at(delay + FLY, () => sfx.count(j)); // as this counter lands in its square
+      sfx.count(j, inMs(delay + FLY)); // as this counter lands in its square (same tick as its fly animation)
       flyEnd = Math.max(flyEnd, delay + FLY);
     });
     if (!reduced) [ctx.iS, ctx.iL].forEach(i => anim(ctx.tiles[i], [{ transform: 'scale(1)' }, { transform: 'scale(1.15)', offset: 0.3 }, { transform: 'scale(1)' }], { duration: 300 }));
@@ -140,23 +141,23 @@ export function teach(ctx: TeachCtx, a: number, b: number): TeachRun {
     }
     // 3. handover (v0.2.2, unchanged): the make-ten (frames, captions AND counters) fades out in place to opacity 0
     // first; counters never move during the fade. Only then does the answer rise on its own into the whole.
-    ctx.onStage?.('absorb'); sfx.bond();
+    ctx.onStage?.('absorb');
     const W = { x: w / 2, y: h * 0.27 }, P = [{ x: w / 2 - 88, y: h * 0.63 }, { x: w / 2 + 88, y: h * 0.63 }];
     const FADE = 200, RISE = reduced ? 1 : 300, B = FADE + 20; // B: the answer starts rising (just after the fade)
     [...frames, ...caps, ...dots].forEach(e => anim(e, [{ opacity: 1 }, { opacity: 0 }], { duration: FADE, fill: 'both', easing: 'ease-in' }));
     anim(ans, [{ translate: '0 0', scale: '1' }, { translate: `${W.x - A.x}px ${W.y - A.y}px`, scale: String(88 / 72) }], { duration: RISE, delay: B, easing: 'cubic-bezier(.3,.8,.4,1)', fill: 'both', composite: 'replace' });
+    sfx.bond(inMs(B)); // the answer rises
     /*
-     * 4. bond (v0.2.3, GD timing). Clock 0 = the answer reaches the top.
-     *   Build ~0.8 s: the answer settles, the branches grow down one after the other, part 1 pops, then part 2.
-     *   Read 2.5 s: the caption fades in and holds; confetti + Blaze's hop fire as it lands; part 1, part 2 and then
-     *   the whole pulse softly in turn with the caption's words.
-     *   Clear 0.3 s: the bond fades, then the strip returns to "? + ? = ?" and the next board appears.
-     * Reduced motion: everything simply appears (short fades, no scale/draw/confetti/hop) with the same 2.5 s hold.
+     * 4. bond (v0.2.3, GD spec). Clock 0 = the answer reaches the top.
+     *   Build 0-0.8 s: the answer settles, branch 1 then branch 2 grow down; part 1 pops at 0.34, part 2 at 0.58.
+     *   0.8 s: the caption lands (fading in from 0.54) = cheer: one confetti burst + Blaze's hop.
+     *   Read: soft pulses at 1.0 (part 1), 1.6 (part 2), 2.2 s (whole), each with its caption word; hold to 3.3 s.
+     *   Clear 3.3-3.6 s: the bond fades, the strip returns to "? + ? = ?", then the next board.
+     * Reduced motion: the same clock and hold, but things simply appear (short fades); no draw, scale, confetti or hop.
      */
     const R = B + RISE; // answer at the top (relative to the handover)
-    const BUILD = 800, READ = 2500, CLEAR = 300;
-    const SETTLE = 100, BR = 240, POP = 220; // build: settle, branch 1, branch 2 + pop 1, pop 2 => 100 + 240 + 240 + 220 = 800
-    const tB1 = SETTLE, tB2 = SETTLE + BR, tP1 = tB2, tP2 = tB2 + BR, tCap = BUILD;
+    const SETTLE = 100, BR = 240, POP = 220;
+    const tB1 = SETTLE, tB2 = SETTLE + BR, tP1 = 340, tP2 = 580, CAPIN = 260, tCap = 800, PULSE = [1000, 1600, 2200], tClear = 3300, CLEAR = 300;
     if (!reduced) anim(ans, [{ scale: '1' }, { scale: '1.06', offset: 0.45 }, { scale: '1' }], { duration: 200, delay: R, easing: 'ease-out', composite: 'accumulate' });
     const svg = add(document.createElementNS('http://www.w3.org/2000/svg', 'svg')); svg.setAttribute('class', 'bondlines');
     svg.setAttribute('viewBox', `0 0 ${w} ${h}`);
@@ -174,32 +175,33 @@ export function teach(ctx: TeachCtx, a: number, b: number): TeachRun {
       return e;
     };
     const parts = [circ(P[0].x, P[0].y, plan.S, 'p0', tP1, 36), circ(P[1].x, P[1].y, plan.L, 'p1', tP2, 36)];
-    at(R + (reduced ? 0 : tP1), () => sfx.bondPart(0)); at(R + (reduced ? 0 : tP2), () => sfx.bondPart(1));
+    sfx.partPop(0, inMs(R + (reduced ? 0 : tP1))); sfx.partPop(1, inMs(R + (reduced ? 0 : tP2)));
     const bc = add(document.createElement('div')); bc.className = 'tcap bondcap'; bc.style.top = P[0].y + 58 + 'px';
     bc.innerHTML = `<span class="w p0">${plan.S}</span> and <span class="w p1">${plan.L}</span> make <span class="w whole">${plan.c}</span>`;
-    const CAPIN = reduced ? 200 : 260, capAt = R + (reduced ? 200 : tCap);
-    fadeIn(bc, CAPIN, capAt, reduced ? 0 : 6);
+    const capIn = reduced ? 200 : CAPIN, capLand = R + tCap; // the caption has fully landed at +0.8 s
+    fadeIn(bc, capIn, capLand - capIn, reduced ? 0 : 6);
     // soft pulses in turn through the read: part 1, part 2, the whole, each with its word in the caption
     const words = [...bc.querySelectorAll('.w')] as HTMLElement[];
-    if (!reduced) [parts[0], parts[1], ans].forEach((node, i) => {
-      const t = capAt + CAPIN + 300 + i * 600;
+    [parts[0], parts[1], ans].forEach((node, i) => {
+      const t = R + PULSE[i];
+      sfx.pulse(i, inMs(t)); // same tick as its pulse animation
+      if (reduced) return;
       anim(node, [{ scale: '1' }, { scale: '1.1', offset: 0.4 }, { scale: '1' }], { duration: 520, delay: t, easing: 'ease-in-out', composite: 'accumulate' });
       anim(words[i], [{ scale: '1' }, { scale: '1.18', offset: 0.4 }, { scale: '1' }], { duration: 520, delay: t, easing: 'ease-in-out' });
-      at(t, () => sfx.pulse(i));
     });
     if (await wait(R)) return;
     ctx.onStage?.('bond');
-    if (await wait(capAt + CAPIN - R)) return;
+    if (await wait(tCap)) return;
     // the caption has landed and the bond is complete: one confetti burst onto the finished bond, Blaze hops
     ctx.onStage?.('cheer'); sfx.caption(); sfx.cheer();
     confetti(layer, W.x, W.y + 40, 30, (a, el) => { anims.push(a); els.push(el); });
     if (!reduced) ctx.onHop();
-    if (await wait(READ - CAPIN)) return; // the 2.5 s read starts as the caption begins to fade in
+    if (await wait(tClear - tCap)) return; // hold: 2.5 s of reading after the caption lands
     // clear: the bond fades, then teach ends and the caller restores "? + ? = ?" and shows the next board
     ctx.onStage?.('clear');
     [ans, ...parts, bc, svg as unknown as HTMLElement, plate].forEach(e => anim(e, [{ opacity: 1 }, { opacity: 0 }], { duration: CLEAR, fill: 'forwards', easing: 'ease-in' }));
     if (await wait(CLEAR)) return;
-    finish();
+    finish(false);
   })();
   return { done, skip: finish, plan };
 }

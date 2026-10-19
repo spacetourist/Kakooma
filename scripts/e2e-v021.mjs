@@ -120,11 +120,14 @@ await waitPlay();
 await wait(300); await tapTile(await answerIdx()); await stage('fly'); await wait(300);
 const sk = await clock(); check(sk.phase === 'feedback' && !sk.running, 'third solve is a full teaching solve');
 await shot('10-skip-before');
+await kk(() => { window.__sfxLog = []; });
 const t0 = Date.now(); await tapAnywhere();
 await waitPlay(2000); const skipMs = Date.now() - t0;
 const sk2 = await kk(() => ({ fx: document.querySelectorAll('#fx .ctr, #fx .tf, #fx .bnode').length, dim: document.querySelectorAll('.tile.dim').length, skipper: document.getElementById('skipper').classList.contains('hidden'), running: window.__kk.running }));
 check(skipMs < 400 && sk2.fx === 0 && sk2.dim === 0 && sk2.skipper && sk2.running, `tap to skip: next board live in ${skipMs} ms (incl. test round-trip), overlay cleared, timer running`);
 check((await kk(() => window.__kk.score)) === 3, 'skip tap did not land on the new board');
+check(await kk(() => window.__sfxLog.some(([n]) => n === 'stopAll')), 'tap-to-skip calls stopAll() (scheduled lesson sounds cut)');
+await kk(() => { window.__sfxLog = null; });
 await shot('11-skip-after');
 
 // ---------- quick solve (4th) ----------
@@ -319,10 +322,16 @@ async function lessonRun(onTap) {
   const sx = Object.fromEntries(r1.sfx.map(([n, t]) => [n, t]));
   const counts = r1.sfx.filter(([n]) => n.startsWith('count('));
   check(counts.length === 19 && counts.every(([n], i) => n === `count(${i})`), `count(i) fires once per counter as it lands: ${counts.length}x, ${counts[0]?.[1]}-${counts.at(-1)?.[1]} ms`);
-  const order = ['bondPart(0)', 'bondPart(1)', 'caption', 'cheer', 'pulse(0)', 'pulse(1)', 'pulse(2)'].map(n => sx[n]);
-  check(order.every((t, i) => t != null && (i === 0 || t >= order[i - 1])) && sx.caption === sx.cheer, 'bond hooks in order: bondPart(0) < bondPart(1) < caption = cheer < pulse(0) < pulse(1) < pulse(2) ' + JSON.stringify(order));
-  const build = sx['bondPart(1)'] + 220 - r1.stg.bond, read = r1.stg.clear - (sx.caption - 260);
-  check(build >= 700 && build <= 950 && read >= 2400 && read <= 2650, `bond timing: build ${build} ms (~0.8 s), read ${read} ms (2.5 s), clear ${r1.stg['next board'] - r1.stg.clear} ms (0.3 s)`);
+  // GD spec, from the answer reaching the top (stage 'bond'): partPop 0.34 / 0.58, caption = cheer 0.8, pulses 1.0 / 1.6 / 2.2, clear 3.3, done 3.6
+  const top = r1.stg.bond, rel = n => sx[n] == null ? null : sx[n] - top;
+  const spec = { 'partPop(0)': 340, 'partPop(1)': 580, caption: 800, cheer: 800, 'pulse(0)': 1000, 'pulse(1)': 1600, 'pulse(2)': 2200 };
+  const got = Object.fromEntries(Object.keys(spec).map(n => [n, rel(n)]));
+  check(Object.entries(spec).every(([n, t]) => got[n] != null && Math.abs(got[n] - t) <= 40), 'bond hooks on the GD spec (ms after the answer reaches the top) ' + JSON.stringify(got));
+  const clr = r1.stg.clear - top, end = r1.stg['next board'] - top;
+  check(Math.abs(clr - 3300) <= 50 && Math.abs(end - 3600) <= 70, `hold to ${clr} ms (3.3 s), clear to ${end} ms (3.6 s)`);
+  check(!r1.sfx.some(([n]) => n === 'stopAll'), 'stopAll not called when the lesson plays to the end');
+  const ans1 = { bond: sx.bond, top };
+  check(Math.abs(sx.bond - (r1.stg.absorb + 220)) <= 40, 'bond() fires as the answer starts to rise ' + JSON.stringify(ans1));
   // confetti peak: one burst, widest spread ~450 ms after it fires
   await lessonRun(async () => {
     await stage('cheer'); await wait(430); await shot('confetti-peak');

@@ -1,20 +1,46 @@
 /**
- * Sound hooks for the audio pack (v0.2.3). No audio yet: every hook is a no-op. They are always called AFTER the
- * state change they describe, never on the input path. Tests can set window.__sfxLog = [] to record
- * [name, args, performance.now()] for each call; normal play never sets it.
+ * Sound hooks (v0.2.3). No audio yet: every hook is a no-op. The names and signatures match the Audio Engineer's
+ * pack (/workspace/kakooma-audio/dist/kkaudio.ts), so wiring it in later is `export { sfx } from './kkaudio'`.
+ * Hooks are always called AFTER the state change they describe, never on the input path. A hook that belongs to a
+ * delayed animation is called in the same tick that animation is created, with `{ delay }` (seconds) on the audio
+ * clock, never from a separate timer; stopAll() cancels anything scheduled (tap-to-skip, quit, round end).
+ * Tests can set window.__sfxLog = [] to record [name, args, firesAtMs] (performance.now() + delay).
  */
-const log = (name: string, ...args: number[]) => { const L = (window as any).__sfxLog; if (L) L.push([name, args, performance.now()]); };
+export interface PlayOpts { when?: number; delay?: number; gainDb?: number }
+const log = (name: string, args: number[], o?: PlayOpts) => {
+  const L = (window as any).__sfxLog; if (L) L.push([name, args, performance.now() + (o?.delay ?? 0) * 1000]);
+};
 export const sfx = {
   // game input + feedback
-  tap(): void { log('tap'); }, correct(): void { log('correct'); }, wrong(): void { log('wrong'); }, penalty(): void { log('penalty'); },
+  tap(o?: PlayOpts): void { log('tap', [], o); },
+  correct(o?: PlayOpts): void { log('correct', [], o); },   // also Bond Lab quiz right
+  wrong(o?: PlayOpts): void { log('wrong', [], o); },       // also Bond Lab quiz wrong
+  penalty(o?: PlayOpts): void { log('penalty', [], o); },   // the -3 s
   // round + timer
-  roundStart(): void { log('roundStart'); }, lowTime(): void { log('lowTime'); }, tick(s: number): void { log('tick', s); }, timeUp(): void { log('timeUp'); },
-  streak(level: number): void { log('streak', level); }, newBest(): void { log('newBest'); },
+  roundStart(o?: PlayOpts): void { log('roundStart', [], o); },
+  lowTime(o?: PlayOpts): void { log('lowTime', [], o); },
+  tick(s: number, o?: PlayOpts): void { log('tick', [s], o); },
+  timeUp(o?: PlayOpts): void { log('timeUp', [], o); },
+  streak(level: number, o?: PlayOpts): void { log('streak', [level], o); },
+  newBest(o?: PlayOpts): void { log('newBest', [], o); },
   // UI
-  uiTap(): void { log('uiTap'); }, replay(): void { log('replay'); },
+  uiTap(o?: PlayOpts): void { log('uiTap', [], o); },
+  replay(o?: PlayOpts): void { log('replay', [], o); },
   // teaching solve
-  count(i: number): void { log('count', i); }, hop(): void { log('hop'); }, makeTen(): void { log('makeTen'); }, bond(): void { log('bond'); },
-  bondPart(i: number): void { log('bondPart', i); }, caption(): void { log('caption'); }, cheer(): void { log('cheer'); }, pulse(i: number): void { log('pulse', i); },
+  count(i: number, o?: PlayOpts): void { log('count', [i], o); },
+  hop(o?: PlayOpts): void { log('hop', [], o); },
+  makeTen(o?: PlayOpts): void { log('makeTen', [], o); },
+  bond(o?: PlayOpts): void { log('bond', [], o); },
+  partPop(i: number, o?: PlayOpts): void { log('partPop', [i], o); },   // 0 = smaller part, 1 = larger
+  cheer(o?: PlayOpts): void { log('cheer', [], o); },
+  caption(o?: PlayOpts): void { log('caption', [], o); },
+  pulse(i: number, o?: PlayOpts): void { log('pulse', [i], o); },       // 0 smaller part, 1 larger part, 2 whole
+  clear(o?: PlayOpts): void { log('clear', [], o); },                   // in the pack's API; optional, not called (pack default playClear: false)
   // Bond Lab
-  slide(n: number): void { log('slide', n); }, labPair(a: number): void { log('labPair', a); }, star(): void { log('star'); }, quizStart(): void { log('quizStart'); },
+  slide(n: number, o?: PlayOpts): void { log('slide', [n], o); },
+  labPair(a: number, o?: PlayOpts): void { log('labPair', [a], o); },
+  star(o?: PlayOpts): void { log('star', [], o); },
+  quizStart(o?: PlayOpts): void { log('quizStart', [], o); },
 };
+/** Cancel every scheduled/playing sound (the pack fades over 60 ms). Called whenever a lesson is cut short. */
+export function stopAll(): void { log('stopAll', []); }
