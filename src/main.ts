@@ -1,5 +1,9 @@
 import './style.css';
-import { generate, type Puzzle } from './puzzle';
+import { generate, sumKey, type Puzzle } from './puzzle';
+import { teach, type TeachRun } from './teach';
+import { haptic, ripple, reducedMotion } from './fx';
+import { sfx } from './sfx';
+import { initLab } from './lab';
 
 const $ = (id: string) => document.getElementById(id)!;
 const NS = [4, 5, 6, 7] as const;
@@ -11,9 +15,11 @@ const PENALTY_MS = 3000;          // wrong tap
 const FEEDBACK_MS = 500;          // correct-answer feedback; the round timer is PAUSED for it
 const SLIDE_MS = 250;             // picker change: tiles slide to the new corners
 const LS = { board: 'kk.board.v1', n: 'kk.n' };
+/** ?teach=quick|full forces the solve animation (testing). Default: full on the first 3 solves, milestones, new best, after a mistake, chip taps. */
+const TEACH = Q.get('teach');
 const MAX = 7;
 
-type Phase = 'menu' | 'play' | 'feedback' | 'done';
+type Phase = 'menu' | 'play' | 'feedback' | 'replay' | 'done';
 /** One solved puzzle; kept per round so a tray chip can replay its explanation in v0.2. */
 interface Solved { a: number; b: number; c: number; nums: number[]; n: number; ms: number }
 interface Entry { name: string; n: number; score: number; streak: number; avg: number | null; miss: number; at: number }
@@ -22,7 +28,7 @@ const st = {
   phase: 'menu' as Phase, n: 5, puzzle: null as Puzzle | null,
   left: ROUND_MS, since: 0, running: false,
   score: 0, miss: 0, streak: 0, best: 0, solve: [] as number[], solved: [] as Solved[], shownAt: 0, pausedAt: 0,
-  seen: new Set<string>(), badTiles: new Set<number>(), timers: new Set<number>(), run: 0,
+  prevBest: 0, teach: null as { skip: () => void } | null, teachCount: 0, teachStage: '', seen: new Set<string>(), badTiles: new Set<number>(), timers: new Set<number>(), run: 0,
 };
 (window as any).__kk = st;
 
@@ -36,7 +42,7 @@ function later(fn: () => void, ms: number) {
   const h = window.setTimeout(() => { st.timers.delete(h); if (st.run === run) fn(); }, ms);
   st.timers.add(h);
 }
-function cancelTimers() { for (const h of st.timers) clearTimeout(h); st.timers.clear(); }
+function cancelTimers() { for (const h of st.timers) clearTimeout(h); st.timers.clear(); st.teach?.skip(); }
 const esc = (s: string) => s.replace(/[&<>"']/g, c => `&#${c.charCodeAt(0)};`);
 
 // ---------- version ----------
@@ -114,9 +120,14 @@ function setStreak(s: number, prev: number) {
   const t = tier(s); blaze.dataset.tier = String(t);
   if (t > tier(prev)) blazeBody.animate([{ transform: 'translateY(0)' }, { transform: 'translateY(-14px)', offset: 0.4 }, { transform: 'translateY(0)' }], { duration: 380, easing: 'ease-out' });
 }
-function sigh() {
-  blazeBody.animate([{ transform: 'scale(1)' }, { transform: 'scale(.85) translateY(3px)', offset: 0.25 }, { transform: 'scale(.85) translateY(3px)', offset: 0.75 }, { transform: 'scale(1)' }], { duration: 700, easing: 'ease-in-out' });
-  for (const l of blaze.querySelectorAll('.lid, .mouth')) l.animate([{ opacity: 0 }, { opacity: 1, offset: 0.12 }, { opacity: 1, offset: 0.88 }, { opacity: 0 }], { duration: 460, delay: 80 });
+/** Wrong tap: Blaze tilts his head; if a streak broke he also shrinks and sighs (eyes close). */
+function blazeWrong(sighToo: boolean) {
+  const s = sighToo ? ' scale(.85) translateY(3px)' : '';
+  blazeBody.animate([{ transform: 'rotate(0)' }, { transform: `rotate(-14deg)${s}`, offset: 0.25 }, { transform: `rotate(-14deg)${s}`, offset: 0.75 }, { transform: 'rotate(0)' }], { duration: 800, easing: 'ease-in-out' });
+  if (sighToo) for (const l of blaze.querySelectorAll('.lid, .mouth')) l.animate([{ opacity: 0 }, { opacity: 1, offset: 0.12 }, { opacity: 1, offset: 0.88 }, { opacity: 0 }], { duration: 460, delay: 80 });
+}
+function blazeHop() {
+  blazeBody.animate([{ transform: 'translateY(0) scale(1)' }, { transform: 'translateY(-18px) scale(1.08)', offset: 0.4 }, { transform: 'translateY(0) scale(1)' }], { duration: 450, easing: 'ease-out' });
 }
 
 // ---------- timer ----------
@@ -140,7 +151,7 @@ function drawTimer(left: number) {
   if (low !== lastLow) { lastLow = low; timerEl.classList.toggle('low', low); segsEl.classList.toggle('low', low); }
 }
 function tick() {
-  if (st.phase !== 'play' && st.phase !== 'feedback') { loop = 0; return; }
+  if (st.phase !== 'play' && st.phase !== 'feedback' && st.phase !== 'replay') { loop = 0; return; }
   const left = timeLeft(performance.now());
   drawTimer(left);
   if (left <= 0 && st.phase === 'play') { endRound(); loop = 0; return; }
@@ -165,23 +176,74 @@ let newestChip: HTMLElement | null = null;
 /** Newest chip first (green); older chips neutral. data-k indexes st.solved for the v0.2 replay. */
 function addChip(s: Solved, k: number) {
   newestChip?.classList.remove('new');
-  const c = document.createElement('div');
-  c.className = 'chip new'; c.setAttribute('role', 'listitem'); c.dataset.k = String(k);
+  const c = document.createElement('button');
+  c.type = 'button'; c.className = 'chip new'; c.dataset.k = String(k); c.tabIndex = -1;
   c.textContent = `${s.a} + ${s.b} = ${s.c}`;
   tray.prepend(c); tray.scrollTop = 0; newestChip = c;
 }
-/** v0.2: tapping a chip replays how its sum was made. Not wired up in v0.1.1 (chips are not tappable yet). */
-export function chipSolve(el: Element): Solved | null { const k = (el as HTMLElement).dataset.k; return k == null ? null : st.solved[+k] ?? null; }
+function chipSolve(el: Element): Solved | null { const k = (el as HTMLElement).dataset.k; return k == null ? null : st.solved[+k] ?? null; }
+/** Tap a chip: replay the full teaching solve for that sum on its own board, timer paused, then restore the live board. */
+press(tray, e => { const c = (e.target as HTMLElement).closest('.chip') as HTMLElement | null; if (!c) return; const s = chipSolve(c); if (s) replay(s, c); });
+function replay(s: Solved, chip: HTMLElement) {
+  if (st.phase !== 'play' || st.teach || !st.puzzle) return;
+  const t0 = performance.now(); pause(t0); st.phase = 'replay';
+  const live = st.puzzle, bad = [...st.badTiles];
+  showPuzzle({ nums: s.nums, answer: s.c, a: s.a, b: s.b }, false);
+  const iC = s.nums.indexOf(s.c);
+  tiles[iC].classList.add('ok'); tiles[s.nums.indexOf(s.a)].classList.add('add'); tiles[s.nums.indexOf(s.b)].classList.add('add');
+  showSum(s); chip.classList.add('playing'); haptic(10);
+  runTeach(s, iC, () => {
+    chip.classList.remove('playing');
+    showPuzzle(live, false); for (const i of bad) tiles[i].classList.add('bad');
+    showSum(null);
+    const now = performance.now(); st.shownAt += now - t0; st.phase = 'play'; resume(now);
+  });
+}
+
+// ---------- teaching solve ----------
+const fxEl = $('fx'), skipper = $('skipper');
+function runTeach(s: Solved, iC: number, then: () => void) {
+  const run = st.run; let real: TeachRun | null = null, ended = false;
+  const end = () => {
+    if (ended) return; ended = true;
+    if (st.teach === handle) st.teach = null;
+    st.teachStage = ''; skipper.classList.add('hidden');
+    if (st.run === run) then();
+  };
+  const handle = { skip: () => { if (real) real.skip(); else Promise.resolve().then(end); } };
+  st.teach = handle; st.teachCount++; skipper.classList.remove('hidden');
+  // build the animation in the next frame so the tap handler only flips state + classes (input stays instant)
+  requestAnimationFrame(() => {
+    if (ended) return;
+    real = teach({ layer: fxEl, tiles, centre: i => ({ x: cur[i].x, y: cur[i].y }), n: s.nums.length,
+      iS: s.nums.indexOf(s.a), iL: s.nums.indexOf(s.b), iC, onHop: blazeHop, onStage: g => { st.teachStage = g; } }, s.a, s.b);
+    real.done.then(end);
+  });
+}
+// tap anywhere to skip (pointerdown: instant); the catcher eats the tap so it never lands on the next board
+skipper.addEventListener('pointerdown', e => { e.preventDefault(); st.teach?.skip(); });
+skipper.addEventListener('click', e => { if (e.detail === 0) st.teach?.skip(); });
+function wantsFull(extra: boolean) { if (TEACH === 'quick') return false; if (TEACH === 'full') return true; return st.score <= 3 || extra; }
+let capEl: HTMLElement | null = null;
+/** Wrong tap: a small caption next to the tile explaining why. */
+function wrongCaption(i: number, v: number) {
+  capEl?.remove();
+  const c = document.createElement('div'); c.className = 'wcap'; c.textContent = `${v} can't be made from two of these`;
+  // Sit in the gap above the sum strip so it never covers a tile the player still needs.
+  c.style.left = '50%'; c.style.top = board.clientHeight - 10 + 'px'; void i;
+  fxEl.appendChild(c); capEl = c;
+  c.animate([{ opacity: 0, translate: '0 -4px' }, { opacity: 1, translate: '0 0', offset: 0.1 }, { opacity: 1, offset: 0.85 }, { opacity: 0 }], { duration: 2000, fill: 'both' }).onfinish = () => { c.remove(); if (capEl === c) capEl = null; };
+}
 
 // ---------- round ----------
 const play = $('play');
 function setMode(m: 'menu' | 'game') { play.dataset.mode = m; }
-function show(id: 'play' | 'results' | 'boards') { for (const s of ['play', 'results', 'boards']) $(s).classList.toggle('hidden', s !== id); }
+function show(id: 'play' | 'results' | 'boards' | 'lab') { for (const s of ['play', 'results', 'boards', 'lab']) $(s).classList.toggle('hidden', s !== id); }
 
 function startRound() {
   cancelTimers(); st.run++;
   Object.assign(st, { phase: 'play', left: ROUND_MS, running: false, score: 0, miss: 0, streak: 0, best: 0, solve: [], solved: [], seen: new Set<string>() });
-  tray.replaceChildren(); newestChip = null;
+  tray.replaceChildren(); newestChip = null; st.prevBest = boardFor(st.n)[0]?.score ?? 0; st.teachCount = 0;
   scoreTxt.textContent = '0'; setStreak(0, 0); lastTenth = lastSegs = -1; lastLow = null; drawTimer(ROUND_MS);
   setMode('game'); show('play');
   layout(st.n, 0);
@@ -191,14 +253,20 @@ function startRound() {
 function nextPuzzle() {
   st.badTiles.clear();
   showSum(null);
-  showPuzzle(generate(st.n, Math.random, st.seen), true); // no sum repeats within a round (reset in startRound)
+  // window.__kkNext: optional queue of puzzles for automated tests (deterministic stage shots); normal play never sets it
+  const q = (window as any).__kkNext as Puzzle[] | undefined;
+  const p = q?.length ? q.shift()! : generate(st.n, Math.random, st.seen); // no sum repeats within a round (reset in startRound)
+  st.seen.add(sumKey(p.a, p.b));
+  showPuzzle(p, true);
   const now = performance.now();
   st.shownAt = now; st.phase = 'play'; resume(now);
 }
 board.addEventListener('pointerdown', e => {
   const t = (e.target as HTMLElement).closest('.tile') as HTMLElement | null;
   if (!t) return; e.preventDefault();
-  onTap(+t.dataset.i!, e.timeStamp);
+  const i = +t.dataset.i!, was = st.phase;
+  onTap(i, e.timeStamp);
+  if (was === 'play' && i < shownN) { ripple(fxEl, cur[i].x, cur[i].y); haptic(10); sfx.tap(); } // after the state change: never delays input
 });
 function onTap(i: number, now: number) {
   if (st.phase !== 'play' || !st.puzzle || i >= st.puzzle.nums.length) return;
@@ -206,6 +274,8 @@ function onTap(i: number, now: number) {
   const p = st.puzzle, v = p.nums[i];
   if (v === p.answer) {
     pause(now); st.phase = 'feedback';
+    const hadMistake = st.badTiles.size > 0;
+    capEl?.remove(); capEl = null;
     // the solved board shows only the two blue parts and the green answer: clear any wrong (coral) state first
     for (const t of tiles) { t.classList.remove('bad'); for (const a of t.getAnimations()) a.cancel(); }
     tiles[i].classList.add('ok');
@@ -215,15 +285,24 @@ function onTap(i: number, now: number) {
     st.solve.push(now - st.shownAt);
     const prev = st.streak; st.score++; st.streak++; st.best = Math.max(st.best, st.streak);
     scoreTxt.textContent = String(st.score); setStreak(st.streak, prev);
-    later(nextPuzzle, FEEDBACK_MS);
+    sfx.correct();
+    const milestone = st.streak === 5 || st.streak === 10 || st.streak === 20;
+    const newBest = st.prevBest > 0 && st.score === st.prevBest + 1;
+    if (wantsFull(milestone || newBest || hadMistake)) runTeach(solved, i, nextPuzzle);
+    else { // quick: squish -> green bounce + the sum strip
+      if (!reducedMotion()) tiles[i].animate([{ transform: 'scale(.92)' }, { transform: 'scale(1.12)', offset: 0.45 }, { transform: 'scale(1)' }], { duration: 320, easing: 'ease-out' });
+      later(nextPuzzle, FEEDBACK_MS);
+    }
   } else {
     if (st.badTiles.has(i)) return; // no double penalty for re-tapping the same wrong tile
     st.badTiles.add(i); st.miss++;
     st.left -= PENALTY_MS;
     const t = tiles[i]; t.classList.add('bad');
-    t.animate([{ transform: 'translateX(0)' }, { transform: 'translateX(-6px)' }, { transform: 'translateX(6px)' }, { transform: 'translateX(-4px)' }, { transform: 'translateX(0)' }], { duration: 220 });
+    // gentle wobble (starts from the tap squish)
+    t.animate([{ transform: 'scale(.92)' }, { transform: 'translateX(-5px) scale(.97)' }, { transform: 'translateX(5px)' }, { transform: 'translateX(-3px)' }, { transform: 'translateX(0)' }], { duration: 260, easing: 'ease-out' });
+    wrongCaption(i, v); sfx.wrong();
     $('penalty').animate([{ opacity: 1, transform: 'translateY(0)' }, { opacity: 0, transform: 'translateY(-10px)' }], { duration: 700, easing: 'ease-out' });
-    if (st.streak > 0) sigh();
+    blazeWrong(st.streak > 0);
     const prev = st.streak; st.streak = 0; setStreak(0, prev);
     if (timeLeft(now) <= 0) endRound();
   }
@@ -324,6 +403,8 @@ function toMenu() {
 }
 press($('mStart'), () => startRound());
 press($('mBoards'), () => { fromGame = false; showBoards(st.n); });
+const lab = initLab(press, () => toMenu());
+press($('mLab'), () => { show('lab'); lab.open(); });
 press($('gQuit'), quit);
 
 { const n = Number(localStorage.getItem(LS.n)); if ((NS as readonly number[]).includes(n)) st.n = n; }

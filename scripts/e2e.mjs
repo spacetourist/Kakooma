@@ -47,7 +47,7 @@ async function tilesOnCorners(n) {
   }, n);
 }
 
-await page.goto(BASE + '?round=' + ROUND); await kk(() => localStorage.clear()); await page.reload();
+await page.goto(BASE + '?teach=quick&round=' + ROUND); await kk(() => localStorage.clear()); await page.reload();
 await page.waitForFunction(() => document.fonts.status === 'loaded');
 check(new RegExp('^' + (process.env.EXPECT_VER || 'v0\\.1') + '$').test(await page.textContent('#verLabel')), 'menu shows version v0.1: ' + await page.textContent('#verLabel'));
 check((await page.textContent('.wordmark')) === 'KAKOOMA', 'wordmark KAKOOMA');

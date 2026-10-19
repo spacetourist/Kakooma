@@ -33,6 +33,7 @@
 
     <div class="board" id="board">
       <svg class="outline" id="outline"><polygon id="outlinePoly" points=""/></svg>
+      <div class="fx" id="fx"></div>
     </div>
     <p class="prompt menu-only">Find the number made by two others</p>
     <div class="sum game-only" id="sum" aria-live="polite"></div>
@@ -43,6 +44,7 @@
       <div class="best" id="bestLine"></div>
       <div class="foot">
         <button type="button" class="btn primary" id="mStart">Start</button>
+        <button type="button" class="btn ghost" id="mLab">Bond Lab</button>
         <button type="button" class="btn ink" id="mBoards">Leaderboard</button>
       </div>
     </div>
@@ -51,8 +53,44 @@
       <div class="lblrow"><span class="lbl">Score</span><b id="scoreTxt">0</b></div>
       <div class="segs" id="segs" aria-label="Time left"></div>
       <div class="lbl tray-lbl">Solved this round</div>
-      <div class="tray" id="tray" role="list"></div>
+      <div class="tray" id="tray"></div>
+      <div class="tray-cap" id="trayCap">Tap a bond to see how it's made</div>
       <div class="foot"><button type="button" class="btn ghost sm" id="gQuit">Quit</button></div>
+    </div>
+  </section>
+
+  <div class="skipper hidden" id="skipper" aria-label="Skip"></div>
+
+  <section class="screen panel hidden" id="lab">
+    <div class="labfx" id="labFx"></div>
+    <div class="labtop"><h2 class="title">Bond Lab</h2><span class="labstars" id="labStars">★ 0 / 16</span></div>
+    <div class="lbl">Pick a whole number</div>
+    <div class="wholes" id="labWholes"></div>
+    <div id="labMain">
+      <div class="card labcard">
+        <div class="labbond" id="labBond">
+          <svg viewBox="0 0 300 150" aria-hidden="true"><line x1="150" y1="42" x2="70" y2="112"/><line x1="150" y1="42" x2="230" y2="112"/></svg>
+          <div class="bnode whole" id="labW" style="left:110px;top:2px;width:80px;height:80px">10</div>
+          <div class="bnode p0" id="labA" style="left:38px;top:80px;width:64px;height:64px">5</div>
+          <div class="bnode p1" id="labB" style="left:198px;top:80px;width:64px;height:64px">5</div>
+          <div class="labstar" id="labStar" aria-hidden="true">★</div>
+        </div>
+        <div class="labeq" id="labEq"></div>
+        <div class="labdots" id="labDots"></div>
+        <input type="range" id="labSlider" min="1" max="9" value="5" aria-label="Split the counters">
+      </div>
+      <div class="lblrow lab-found-h"><span class="lbl">Bonds found</span><span class="lbl" id="labCount">0 / 5</span></div>
+      <div class="labfound" id="labFound"></div>
+    </div>
+    <div class="card quiz hidden" id="labQuiz">
+      <div class="lbl">Missing part</div>
+      <div class="labq" id="labQ"></div>
+      <div class="sub" id="labQSub"></div>
+      <div class="opts" id="labOpts"></div>
+    </div>
+    <div class="foot pinned">
+      <button type="button" class="btn primary" id="labQuizBtn" disabled>Find every bond for the quiz</button>
+      <button type="button" class="btn ghost" id="labMenu">Menu</button>
     </div>
   </section>
 
