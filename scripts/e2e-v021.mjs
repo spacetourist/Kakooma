@@ -1,4 +1,4 @@
-// e2e v0.2.1: node scripts/e2e-v021.mjs [baseUrl]. GD review fixes: ~3 s solve, full-size ten-frames in rows, hoppers leave + keep colour, wrong caption in the sum strip, Bond Lab slider/ten-frames/quiz label. Plus all v0.2 checks. Teaching solve stages, timer pause, skip, chip replay, wrong caption, Bond Lab, reduced motion, FPS @4x CPU.
+// e2e v0.2.1+ (default expects v0.2.2, shots v022-*; EXPECT_VER / SHOT_TAG override): node scripts/e2e-v021.mjs [baseUrl]. GD review fixes: ~3 s solve, full-size ten-frames in rows, hoppers leave + keep colour, wrong caption in the sum strip, Bond Lab slider/ten-frames/quiz label. Plus all v0.2 checks. Teaching solve stages, timer pause, skip, chip replay, wrong caption, Bond Lab, reduced motion, FPS @4x CPU.
 import { createServer } from 'http';
 import { readFileSync, existsSync, statSync, mkdirSync, writeFileSync } from 'fs';
 import { join, extname } from 'path';
@@ -22,7 +22,8 @@ const errs = [], fails = [], log = [], perf = {};
 const watch = pg => { pg.on('pageerror', e => errs.push(e.message)); pg.on('console', m => { if (m.type() === 'error') errs.push(m.text()); }); };
 watch(page);
 const check = (c, msg) => { (c ? log : fails).push((c ? 'ok   ' : 'FAIL ') + msg); };
-const shot = n => page.screenshot({ path: `${SHOTS}v021-${n}.png` });
+const TAG = process.env.SHOT_TAG || 'v022', VER = process.env.EXPECT_VER || 'v0.2.2';
+const shot = n => page.screenshot({ path: `${SHOTS}${TAG}-${n}.png` });
 const kk = (f, a) => page.evaluate(f, a);
 const wait = ms => page.waitForTimeout(ms);
 async function tapEl(sel) { const bb = await page.locator(sel).first().boundingBox(); await page.touchscreen.tap(bb.x + bb.width / 2, bb.y + bb.height / 2); }
@@ -46,7 +47,7 @@ async function boot(url) {
   await page.waitForFunction(() => document.fonts.status === 'loaded');
 }
 await boot(BASE + '?round=60');
-check((await page.textContent('#verLabel')) === 'v0.2.1', 'menu shows ' + await page.textContent('#verLabel'));
+check((await page.textContent('#verLabel')) === VER, 'menu shows ' + await page.textContent('#verLabel'));
 check(await page.isVisible('#mLab'), 'menu has Bond Lab button');
 const mfoot = await kk(() => document.getElementById('mBoards').getBoundingClientRect().bottom);
 check(mfoot <= 915, `menu buttons fit on screen (bottom ${Math.round(mfoot)})`);
@@ -76,9 +77,16 @@ const c1 = await caps(); check(c1.join('|') === '7 + 3 = 10|10 + 9 = 19', 'make-
 const fc = await frameCounts();
 check(fc.mini === 0 && fc.w.length === 3 && new Set(fc.w).size === 1 && new Set(fc.top).size === 1, `7 + 12: three full-size ten-frames in one row ${JSON.stringify({ w: fc.w, top: fc.top })}`);
 check(JSON.stringify(fc.n) === JSON.stringify([{ p0: 7, p1: 3 }, { p0: 0, p1: 7 }, { p0: 0, p1: 2 }]), `hoppers left their frame and keep their colour: new ten = 7 light + 3 blue, source 7 blue, ones 2 blue ${JSON.stringify(fc.n)}`);
-await stage('absorb'); await wait(250); await shot('06-solve-4-absorb');
-const ab = await kk(() => ({ bonds: document.querySelectorAll('#fx .bondlines').length, bn: document.querySelectorAll('#fx .bnode').length }));
-check(ab.bonds === 1 && ab.bn === 3, 'bond starts drawing while the make-ten fades (no answer-only gap) ' + JSON.stringify(ab));
+await stage('absorb');
+const ansTop = () => kk(() => Math.round(document.querySelector('#fx > .bnode.whole').getBoundingClientRect().top));
+const top0 = await ansTop(); await wait(100);
+const mid = await kk(() => ({ op: Math.max(...[...document.querySelectorAll('#fx .tf, #fx .tcap:not(.bondcap)')].map(e => +getComputedStyle(e).opacity)) }));
+const top1 = await ansTop();
+check(mid.op > 0 && Math.abs(top1 - top0) <= 1, `handover: answer waits while the make-ten fades (opacity ${mid.op.toFixed(2)}, answer moved ${top1 - top0}px)`);
+await stage('bond');
+const fb = await kk(() => ({ op: Math.max(...[...document.querySelectorAll('#fx .tf, #fx .tcap:not(.bondcap), #fx .ctr')].map(e => +getComputedStyle(e).opacity)), lines: document.querySelectorAll('#fx .bondlines').length }));
+check(fb.op < 0.01 && fb.lines === 1, 'frames, captions and counters fully faded (opacity 0) before the answer rises into the bond ' + JSON.stringify(fb));
+await wait(150); await shot('06-solve-4-handover');
 await stage('cheer');
 const overBond = await kk(() => ({ confetti: document.querySelectorAll('#fx .confetti').length, drawing: [...document.querySelectorAll('#fx .bondlines line, #fx .bnode, #fx .bondcap')].some(e => e.getAnimations().some(a => a.playState === 'running' && a.currentTime < (a.effect.getComputedTiming().endTime || 0) - 20)), hop: document.getElementById('blaze').getAnimations().length + document.getElementById('blazeBody').getAnimations().length }));
 await wait(280); await shot('07-solve-5-bond-cheer');
@@ -241,9 +249,9 @@ await tapEl('#picker [data-n="7"]'); await wait(400);
 await queue([P([28, 29, 57, 2, 5, 13, 40], 28, 29)]);
 await tapEl('#mStart'); await waitPlay(); await wait(300);
 await tapTile(await answerIdx());
-await stage('ten2'); await wait(300); await shot('21-big-sum-n7');
+await stage('ten2'); await wait(200); await shot('21-big-sum-n7');
 const bf = await frameCounts();
-const bg = await kk(() => ({ caps: [...document.querySelectorAll('#fx .tcap')].map(e => e.textContent), frames: document.querySelectorAll('#fx .tf').length, minis: document.querySelectorAll('#fx .tf.mini').length, ctr: document.querySelectorAll('#fx .ctr').length,
+const bg = await kk(() => ({ caps: [...document.querySelectorAll('#fx .tcap:not(.bondcap)')].map(e => e.textContent), frames: document.querySelectorAll('#fx .tf').length, minis: document.querySelectorAll('#fx .tf.mini').length, ctr: document.querySelectorAll('#fx .ctr').length,
   inside: [...document.querySelectorAll('#fx .tf')].every(e => { const r = e.getBoundingClientRect(), b = document.getElementById('board').getBoundingClientRect(); return r.left >= b.left - 1 && r.right <= b.right + 1; }) }));
 check(bg.caps.join('|') === '28 + 2 = 30|30 + 27 = 57' && bg.frames === 6 && bg.minis === 0 && bg.ctr === 57 && bg.inside, 'big sum 28 + 29: ' + JSON.stringify(bg));
 check(new Set(bf.w).size === 1 && new Set(bf.top).size === 2 && bf.top.filter(t => t === bf.top[0]).length === 3, `28 + 29: 6 full-size frames (${bf.w[0]} px wide), 2 rows of 3 ${JSON.stringify(bf.top)}`);
@@ -283,7 +291,7 @@ check(f1.avgFps >= 55 && f2.avgFps >= 55, `FPS @4x CPU: ${JSON.stringify(perf)}`
   for (const t of [150, 500, 900, 1300, 1700, 2000, 2300, 2600, 2900, 3200]) {
     const now = await kk(() => performance.now() - window.__t0); if (t > now) await wait(t - now);
     const at = Math.round(await kk(() => performance.now() - window.__t0)), stg = await kk(() => window.__kk.phase === 'play' ? 'next board' : window.__kk.teachStage);
-    await page.screenshot({ path: `${SHOTS}v021-tl-${String(t).padStart(4, '0')}.png` }); tl.push(`${t}:${at}:${stg}`);
+    await page.screenshot({ path: `${SHOTS}${TAG}-tl-${String(t).padStart(4, '0')}.png` }); tl.push(`${t}:${at}:${stg}`);
   }
   perf.timeline = tl;
   // dead-time check: with only the answer node showing (no frames, no bond) there is never a sampled moment
@@ -309,6 +317,6 @@ console.log(log.join('\n'));
 console.log(fails.length ? fails.join('\n') : 'ALL CHECKS PASSED');
 console.log('perf', JSON.stringify(perf, null, 1));
 console.log('page errors:', errs.length ? errs : 'none');
-writeFileSync(new URL('../shots/v021-perf.json', import.meta.url).pathname, JSON.stringify(perf, null, 1));
+writeFileSync(new URL(`../shots/${TAG}-perf.json`, import.meta.url).pathname, JSON.stringify(perf, null, 1));
 await browser.close(); server.close();
 process.exit(fails.length || errs.length ? 1 : 0);

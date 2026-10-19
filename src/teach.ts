@@ -130,48 +130,45 @@ export function teach(ctx: TeachCtx, a: number, b: number): TeachRun {
       fadeIn(caps[0]);
       if (await wait(reduced ? 400 : 320)) return;
       fadeIn(caps[1]); ctx.onStage?.('ten2');
-      if (await wait(reduced ? 600 : 480)) return;
+      if (await wait(reduced ? 600 : 420)) return;
     } else {
       fadeIn(caps[0]); ctx.onStage?.('sum');
-      if (await wait(reduced ? 700 : 620)) return;
+      if (await wait(reduced ? 700 : 560)) return;
     }
-    // 3 + 4. the make-ten fades out while the counters stream up into the whole and the bond draws itself
+    // 3 + 4. handover (v0.2.2): the make-ten (frames, captions AND counters) fades out in place to opacity 0 first;
+    // counters never move during the fade, so nothing slides out of its square. Only then does the answer rise into
+    // the whole while the bond draws itself, and the cheer plays over the bond.
     ctx.onStage?.('absorb'); sfx.bond();
     const W = { x: w / 2, y: h * 0.27 }, P = [{ x: w / 2 - 88, y: h * 0.63 }, { x: w / 2 + 88, y: h * 0.63 }];
-    const RISE = reduced ? 1 : 340;
-    anim(ans, [{ translate: '0 0', scale: '1' }, { translate: `${W.x - A.x}px ${W.y - A.y}px`, scale: String(88 / 72) }], { duration: RISE, easing: 'cubic-bezier(.3,.8,.4,1)', fill: 'forwards', composite: 'replace' });
-    plan.counters.forEach((c, j) => {
-      const f = cell(c.hop ?? c.slot);
-      anim(dots[j], [{ transform: T(f.x, f.y), opacity: 1 }, { transform: T(W.x, W.y, 0.3), opacity: 0 }],
-        { duration: reduced ? 200 : 300, delay: reduced ? 0 : j * Math.min(4, 100 / plan.c), easing: 'cubic-bezier(.5,0,.8,.4)', fill: 'both' });
-    });
-    [...frames, ...caps].forEach(e => anim(e, [{ opacity: 1 }, { opacity: 0 }], { duration: reduced ? 200 : 260, fill: 'both' }));
-    if (!reduced) anim(ans, [{ scale: '1' }, { scale: '1.12', offset: 0.4 }, { scale: '1' }], { duration: 260, delay: RISE + 40, easing: 'ease-out', composite: 'accumulate' });
+    const FADE = 200, RISE = reduced ? 1 : 300, B = FADE + 20; // B: when the bond starts (just after the fade has finished)
+    [...frames, ...caps, ...dots].forEach(e => anim(e, [{ opacity: 1 }, { opacity: 0 }], { duration: FADE, fill: 'both', easing: 'ease-in' }));
+    anim(ans, [{ translate: '0 0', scale: '1' }, { translate: `${W.x - A.x}px ${W.y - A.y}px`, scale: String(88 / 72) }], { duration: RISE, delay: B, easing: 'cubic-bezier(.3,.8,.4,1)', fill: 'both', composite: 'replace' });
+    if (!reduced) anim(ans, [{ scale: '1' }, { scale: '1.12', offset: 0.4 }, { scale: '1' }], { duration: 240, delay: B + RISE + 20, easing: 'ease-out', composite: 'accumulate' });
     const svg = add(document.createElementNS('http://www.w3.org/2000/svg', 'svg')); svg.setAttribute('class', 'bondlines');
     svg.setAttribute('viewBox', `0 0 ${w} ${h}`);
     P.forEach((p, i) => {
       const l = document.createElementNS('http://www.w3.org/2000/svg', 'line');
       l.setAttribute('x1', String(W.x)); l.setAttribute('y1', String(W.y)); l.setAttribute('x2', String(p.x)); l.setAttribute('y2', String(p.y));
       const len = Math.hypot(p.x - W.x, p.y - W.y); l.style.strokeDasharray = String(len); svg.appendChild(l);
-      anim(l, [{ strokeDashoffset: len }, { strokeDashoffset: 0 }], { duration: reduced ? 1 : 280, delay: reduced ? 0 : 200 + i * 50, fill: 'both', easing: 'ease-out' });
+      anim(l, [{ strokeDashoffset: len }, { strokeDashoffset: 0 }], { duration: reduced ? 1 : 280, delay: reduced ? B : B + 150 + i * 50, fill: 'both', easing: 'ease-out' });
     });
     const circ = (x: number, y: number, v: number, cls: string, delay: number, r: number) => {
       const e = add(document.createElement('div')); e.className = `bnode ${cls}`; e.textContent = String(v);
       e.style.width = e.style.height = 2 * r + 'px'; e.style.left = x - r + 'px'; e.style.top = y - r + 'px';
-      anim(e, reduced ? [{ opacity: 0 }, { opacity: 1 }] : [{ opacity: 0, scale: '.3' }, { opacity: 1, scale: '1' }], { duration: reduced ? 200 : 300, delay: reduced ? 0 : delay, fill: 'both', easing: 'cubic-bezier(.34,1.56,.64,1)' });
+      anim(e, reduced ? [{ opacity: 0 }, { opacity: 1 }] : [{ opacity: 0, scale: '.3' }, { opacity: 1, scale: '1' }], { duration: reduced ? 200 : 280, delay: B + (reduced ? 0 : delay), fill: 'both', easing: 'cubic-bezier(.34,1.56,.64,1)' });
       return e;
     };
-    circ(P[0].x, P[0].y, plan.S, 'p0', 300, 36); circ(P[1].x, P[1].y, plan.L, 'p1', 350, 36);
+    circ(P[0].x, P[0].y, plan.S, 'p0', 170, 36); circ(P[1].x, P[1].y, plan.L, 'p1', 220, 36);
     const bc = add(document.createElement('div')); bc.className = 'tcap bondcap'; bc.textContent = plan.bond; bc.style.top = P[0].y + 58 + 'px';
-    fadeIn(bc, 240, reduced ? 0 : 400);
-    if (await wait(reduced ? 0 : 120)) return;
+    fadeIn(bc, 220, B + (reduced ? 0 : 280));
+    if (await wait(B)) return;
     ctx.onStage?.('bond');
-    if (await wait(reduced ? 200 : 260)) return;
+    if (await wait(reduced ? 200 : 200)) return;
     // cheer over the bond while it finishes drawing
     sfx.cheer(); ctx.onStage?.('cheer');
     confetti(layer, W.x, W.y, 26, (a, el) => { anims.push(a); els.push(el); });
     if (!reduced) ctx.onHop();
-    if (await wait(reduced ? 1000 : 780)) return;
+    if (await wait(reduced ? 780 : 800)) return;
     finish();
   })();
   return { done, skip: finish, plan };
