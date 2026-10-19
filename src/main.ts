@@ -22,7 +22,7 @@ const st = {
   phase: 'menu' as Phase, n: 5, puzzle: null as Puzzle | null,
   left: ROUND_MS, since: 0, running: false,
   score: 0, miss: 0, streak: 0, best: 0, solve: [] as number[], solved: [] as Solved[], shownAt: 0, pausedAt: 0,
-  badTiles: new Set<number>(), timers: new Set<number>(), run: 0,
+  seen: new Set<string>(), badTiles: new Set<number>(), timers: new Set<number>(), run: 0,
 };
 (window as any).__kk = st;
 
@@ -180,7 +180,7 @@ function show(id: 'play' | 'results' | 'boards') { for (const s of ['play', 'res
 
 function startRound() {
   cancelTimers(); st.run++;
-  Object.assign(st, { phase: 'play', left: ROUND_MS, running: false, score: 0, miss: 0, streak: 0, best: 0, solve: [], solved: [] });
+  Object.assign(st, { phase: 'play', left: ROUND_MS, running: false, score: 0, miss: 0, streak: 0, best: 0, solve: [], solved: [], seen: new Set<string>() });
   tray.replaceChildren(); newestChip = null;
   scoreTxt.textContent = '0'; setStreak(0, 0); lastTenth = lastSegs = -1; lastLow = null; drawTimer(ROUND_MS);
   setMode('game'); show('play');
@@ -191,7 +191,7 @@ function startRound() {
 function nextPuzzle() {
   st.badTiles.clear();
   showSum(null);
-  showPuzzle(generate(st.n), true);
+  showPuzzle(generate(st.n, Math.random, st.seen), true); // no sum repeats within a round (reset in startRound)
   const now = performance.now();
   st.shownAt = now; st.phase = 'play'; resume(now);
 }

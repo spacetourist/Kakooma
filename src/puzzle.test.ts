@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { generate, isValid, sums, valueMax, addendMax } from './puzzle';
+import { generate, isValid, sums, valueMax, addendMax, sumKey, sumCount } from './puzzle';
 
 const PER_N = 5000;
 describe('generate', () => {
@@ -32,5 +32,38 @@ describe('generate', () => {
     expect(isValid([1, 2, 3, 3])).toBe(false);
     expect(isValid([1, 2, 3, 5])).toBe(false); // 3 = 1+2 and 5 = 2+3
     expect(isValid([1, 4, 5, 3])).toBe(false); // 5 = 1+4 and 4 = 1+3
+  });
+});
+
+describe('no repeated sums within a round', () => {
+  const ROUNDS = 25;
+  for (const n of [4, 5, 6, 7]) {
+    // 200 puzzles per round; the 4-number board only has 190 distinct sums, so it is tested at its maximum
+    const LEN = Math.min(200, sumCount(n));
+    it(`n=${n}: ${ROUNDS} rounds x ${LEN} puzzles, no answer triple repeats (${sumCount(n)} possible)`, () => {
+      for (let r = 0; r < ROUNDS; r++) {
+        const seen = new Set<string>(), triples = new Set<string>();
+        for (let t = 0; t < LEN; t++) {
+          const p = generate(n, Math.random, seen);
+          expect(isValid(p.nums)).toBe(true);
+          const tri = `${p.a}+${p.b}=${p.answer}`;
+          expect(triples.has(tri)).toBe(false);
+          triples.add(tri);
+        }
+        expect(seen.size).toBe(LEN);
+      }
+    });
+  }
+  it('order-free key: a+b and b+a are the same sum', () => { expect(sumKey(11, 21)).toBe(sumKey(21, 11)); });
+  it('a fresh set per round allows sums again (reset per round)', () => {
+    const r1 = new Set<string>(); for (let i = 0; i < 50; i++) generate(5, Math.random, r1);
+    const r2 = new Set<string>(); for (let i = 0; i < 50; i++) generate(5, Math.random, r2);
+    expect(r2.size).toBe(50);
+  });
+  it('falls back gracefully once every sum is used (no hang, still valid)', () => {
+    const seen = new Set<string>(), t0 = Date.now();
+    for (let i = 0; i < sumCount(4) + 60; i++) expect(isValid(generate(4, Math.random, seen).nums)).toBe(true);
+    expect(seen.size).toBe(sumCount(4));
+    expect(Date.now() - t0).toBeLessThan(5000);
   });
 });
