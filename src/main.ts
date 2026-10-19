@@ -14,12 +14,14 @@ const LS = { board: 'kk.board.v1', n: 'kk.n' };
 const MAX = 7;
 
 type Phase = 'menu' | 'play' | 'feedback' | 'done';
+/** One solved puzzle; kept per round so a tray chip can replay its explanation in v0.2. */
+interface Solved { a: number; b: number; c: number; nums: number[]; n: number; ms: number }
 interface Entry { name: string; n: number; score: number; streak: number; avg: number | null; miss: number; at: number }
 
 const st = {
   phase: 'menu' as Phase, n: 5, puzzle: null as Puzzle | null,
   left: ROUND_MS, since: 0, running: false,
-  score: 0, miss: 0, streak: 0, best: 0, solve: [] as number[], shownAt: 0, pausedAt: 0,
+  score: 0, miss: 0, streak: 0, best: 0, solve: [] as number[], solved: [] as Solved[], shownAt: 0, pausedAt: 0,
   badTiles: new Set<number>(), timers: new Set<number>(), run: 0,
 };
 (window as any).__kk = st;
@@ -49,7 +51,7 @@ function iconSvg(n: number) {
 }
 
 // ---------- board ----------
-const board = $('board'), poly = $('outlinePoly'), eq = $('eq');
+const board = $('board'), poly = $('outlinePoly');
 const slots: HTMLDivElement[] = [], tiles: HTMLButtonElement[] = [];
 for (let i = 0; i < MAX; i++) {
   const s = document.createElement('div'); s.className = 'slot';
@@ -95,7 +97,7 @@ function layout(n: number, ms: number) {
 addEventListener('resize', () => layout(shownN || st.n, 0));
 
 function showPuzzle(p: Puzzle, pop: boolean) {
-  st.puzzle = p; eq.classList.remove('on');
+  st.puzzle = p;
   for (let i = 0; i < MAX; i++) {
     const t = tiles[i];
     t.className = 'tile'; t.textContent = i < p.nums.length ? String(p.nums[i]) : '';
@@ -151,6 +153,26 @@ document.addEventListener('visibilitychange', () => {
   else { st.shownAt += now - st.pausedAt; resume(now); }
 });
 
+// ---------- sum strip + solved tray ----------
+const sumEl = $('sum'), tray = $('tray');
+/** Strip under the board: the hint on a round's first puzzle, the sum (parts blue, answer green) during feedback, else empty. */
+function showSum(s: Solved | null) {
+  if (s) { sumEl.className = 'sum pop'; sumEl.innerHTML = `<span class="p">${s.a}</span><span>+</span><span class="p">${s.b}</span><span>=</span><span class="a">${s.c}</span>`; }
+  else if (!st.solved.length && !st.miss) { sumEl.className = 'sum hint'; sumEl.textContent = 'Find the number made by two others'; }
+  else { sumEl.className = 'sum'; sumEl.textContent = ''; }
+}
+let newestChip: HTMLElement | null = null;
+/** Newest chip first (green); older chips neutral. data-k indexes st.solved for the v0.2 replay. */
+function addChip(s: Solved, k: number) {
+  newestChip?.classList.remove('new');
+  const c = document.createElement('div');
+  c.className = 'chip new'; c.setAttribute('role', 'listitem'); c.dataset.k = String(k);
+  c.textContent = `${s.a} + ${s.b} = ${s.c}`;
+  tray.prepend(c); tray.scrollTop = 0; newestChip = c;
+}
+/** v0.2: tapping a chip replays how its sum was made. Not wired up in v0.1.1 (chips are not tappable yet). */
+export function chipSolve(el: Element): Solved | null { const k = (el as HTMLElement).dataset.k; return k == null ? null : st.solved[+k] ?? null; }
+
 // ---------- round ----------
 const play = $('play');
 function setMode(m: 'menu' | 'game') { play.dataset.mode = m; }
@@ -158,7 +180,8 @@ function show(id: 'play' | 'results' | 'boards') { for (const s of ['play', 'res
 
 function startRound() {
   cancelTimers(); st.run++;
-  Object.assign(st, { phase: 'play', left: ROUND_MS, running: false, score: 0, miss: 0, streak: 0, best: 0, solve: [] });
+  Object.assign(st, { phase: 'play', left: ROUND_MS, running: false, score: 0, miss: 0, streak: 0, best: 0, solve: [], solved: [] });
+  tray.replaceChildren(); newestChip = null;
   scoreTxt.textContent = '0'; setStreak(0, 0); lastTenth = lastSegs = -1; lastLow = null; drawTimer(ROUND_MS);
   setMode('game'); show('play');
   layout(st.n, 0);
@@ -167,6 +190,7 @@ function startRound() {
 }
 function nextPuzzle() {
   st.badTiles.clear();
+  showSum(null);
   showPuzzle(generate(st.n), true);
   const now = performance.now();
   st.shownAt = now; st.phase = 'play'; resume(now);
@@ -182,9 +206,12 @@ function onTap(i: number, now: number) {
   const p = st.puzzle, v = p.nums[i];
   if (v === p.answer) {
     pause(now); st.phase = 'feedback';
+    // the solved board shows only the two blue parts and the green answer: clear any wrong (coral) state first
+    for (const t of tiles) { t.classList.remove('bad'); for (const a of t.getAnimations()) a.cancel(); }
     tiles[i].classList.add('ok');
     tiles[p.nums.indexOf(p.a)].classList.add('add'); tiles[p.nums.indexOf(p.b)].classList.add('add');
-    eq.textContent = `${p.a} + ${p.b} = ${p.answer}`; eq.classList.add('on');
+    const solved: Solved = { a: p.a, b: p.b, c: p.answer, nums: p.nums.slice(), n: st.n, ms: Math.round(now - st.shownAt) };
+    st.solved.push(solved); showSum(solved); addChip(solved, st.solved.length - 1);
     st.solve.push(now - st.shownAt);
     const prev = st.streak; st.score++; st.streak++; st.best = Math.max(st.best, st.streak);
     scoreTxt.textContent = String(st.score); setStreak(st.streak, prev);

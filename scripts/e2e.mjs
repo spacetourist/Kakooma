@@ -22,7 +22,8 @@ const errs = [], fails = [], log = [];
 page.on('pageerror', e => errs.push(e.message));
 page.on('console', m => { if (m.type() === 'error') errs.push(m.text()); });
 const check = (c, msg) => { (c ? log : fails).push((c ? 'ok   ' : 'FAIL ') + msg); };
-const shot = n => page.screenshot({ path: `${SHOTS}${n}.png` });
+const PREFIX = process.env.SHOT_PREFIX || '';
+const shot = n => page.screenshot({ path: `${SHOTS}${PREFIX}${n}.png` });
 const kk = f => page.evaluate(f);
 const wait = ms => page.waitForTimeout(ms);
 async function tapEl(sel) { const bb = await page.locator(sel).first().boundingBox(); await page.touchscreen.tap(bb.x + bb.width / 2, bb.y + bb.height / 2); }
@@ -48,7 +49,7 @@ async function tilesOnCorners(n) {
 
 await page.goto(BASE + '?round=' + ROUND); await kk(() => localStorage.clear()); await page.reload();
 await page.waitForFunction(() => document.fonts.status === 'loaded');
-check(/^v0\.1$/.test(await page.textContent('#verLabel')), 'menu shows version v0.1: ' + await page.textContent('#verLabel'));
+check(new RegExp('^' + (process.env.EXPECT_VER || 'v0\\.1') + '$').test(await page.textContent('#verLabel')), 'menu shows version v0.1: ' + await page.textContent('#verLabel'));
 check((await page.textContent('.wordmark')) === 'KAKOOMA', 'wordmark KAKOOMA');
 check(await kk(() => document.fonts.check('700 36px Fredoka') && document.fonts.check('800 12px Nunito')), 'Fredoka + Nunito loaded');
 await pickN(4);
@@ -78,7 +79,7 @@ const l1 = await kk(() => window.__kk.left); await wait(250); const l2 = await k
 check(l2.phase === 'feedback' && !l2.running && l1 === l2.left, 'timer paused during correct feedback');
 for (let k = 0; k < 4; k++) await correct();
 await wait(60);
-let s = await kk(() => ({ streak: window.__kk.streak, tier: document.getElementById('blaze').dataset.tier, pill: document.getElementById('streakPill').textContent, eq: document.getElementById('eq').textContent, eqOn: document.getElementById('eq').classList.contains('on'), green: document.querySelectorAll('.tile.ok').length, blue: document.querySelectorAll('.tile.add').length }));
+let s = await kk(() => ({ streak: window.__kk.streak, tier: document.getElementById('blaze').dataset.tier, pill: document.getElementById('streakPill').textContent, eq: document.getElementById('sum').textContent.replace(/([+=])/g, ' $1 '), eqOn: !!document.querySelector('#sum .a'), green: document.querySelectorAll('.tile.ok').length, blue: document.querySelectorAll('.tile.add').length }));
 check(s.streak === 5 && s.tier === '1' && s.pill === 'x5', 'streak x5, Blaze tier 1 ' + JSON.stringify(s));
 check(s.eqOn && /^\d+ \+ \d+ = \d+$/.test(s.eq) && s.green === 1 && s.blue === 2, 'feedback: 1 green, 2 blue, equation ' + s.eq);
 await wait(150); await shot('03-mid-streak-4');

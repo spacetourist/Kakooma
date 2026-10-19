@@ -33,9 +33,9 @@
 
     <div class="board" id="board">
       <svg class="outline" id="outline"><polygon id="outlinePoly" points=""/></svg>
-      <div class="eq" id="eq"></div>
     </div>
-    <p class="prompt">Find the number made by two others</p>
+    <p class="prompt menu-only">Find the number made by two others</p>
+    <div class="sum game-only" id="sum" aria-live="polite"></div>
 
     <div class="below menu-only">
       <div class="lbl">Board</div>
@@ -49,8 +49,9 @@
 
     <div class="below game-only">
       <div class="lblrow"><span class="lbl">Score</span><b id="scoreTxt">0</b></div>
-      <div class="lblrow"><span class="lbl">Time</span></div>
-      <div class="segs" id="segs"></div>
+      <div class="segs" id="segs" aria-label="Time left"></div>
+      <div class="lbl tray-lbl">Solved this round</div>
+      <div class="tray" id="tray" role="list"></div>
       <div class="foot"><button type="button" class="btn ghost sm" id="gQuit">Quit</button></div>
     </div>
   </section>
