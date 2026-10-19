@@ -46,7 +46,7 @@ function cancelTimers() { for (const h of st.timers) clearTimeout(h); st.timers.
 const esc = (s: string) => s.replace(/[&<>"']/g, c => `&#${c.charCodeAt(0)};`);
 
 // ---------- version ----------
-{ const [ma, mi, pa] = __VERSION__.split('.'); $('verLabel').textContent = `v${ma}.${mi}${pa && pa !== '0' ? '.' + pa : ''}`; }
+{ const v = __VERSION__.split('.'); if (v.length === 3 && v[2] === '0') v.pop(); $('verLabel').textContent = 'v' + v.join('.'); } // 0.2.0 -> v0.2, 0.2.3.1 -> v0.2.3.1
 
 // ---------- polygon geometry ----------
 const ang = (n: number, i: number) => -Math.PI / 2 + (n === 4 ? Math.PI / 4 : 0) + (2 * Math.PI * i) / n;

@@ -165,7 +165,10 @@ export function teach(ctx: TeachCtx, a: number, b: number): TeachRun {
       const l = document.createElementNS('http://www.w3.org/2000/svg', 'line');
       l.setAttribute('x1', String(W.x)); l.setAttribute('y1', String(W.y)); l.setAttribute('x2', String(p.x)); l.setAttribute('y2', String(p.y));
       const len = Math.hypot(p.x - W.x, p.y - W.y); l.style.strokeDasharray = String(len); svg.appendChild(l);
-      anim(l, reduced ? [{ strokeDashoffset: 0, opacity: 0 }, { strokeDashoffset: 0, opacity: 1 }] : [{ strokeDashoffset: len }, { strokeDashoffset: 0 }],
+      // v0.2.3.1: a fully dash-offset line still paints its round end-caps as two grey specks at the part
+      // positions, so each branch stays at opacity 0 until its own growth starts (fill: 'both' holds it hidden).
+      l.style.opacity = '0';
+      anim(l, reduced ? [{ strokeDashoffset: 0, opacity: 0 }, { strokeDashoffset: 0, opacity: 1 }] : [{ strokeDashoffset: len, opacity: 0 }, { opacity: 1, offset: 0.04 }, { strokeDashoffset: 0, opacity: 1 }],
         { duration: reduced ? 200 : BR, delay: R + (reduced ? 0 : i ? tB2 : tB1), fill: 'both', easing: reduced ? 'linear' : 'cubic-bezier(.4,0,.3,1)' });
     });
     const circ = (x: number, y: number, v: number, cls: string, at: number, r: number) => {
