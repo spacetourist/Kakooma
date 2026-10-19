@@ -1,4 +1,4 @@
-# Kakooma v0.2.3.1
+# Kakooma v0.2.3.2
 
 Maths trainer for Greg Tang's KAKOOMA puzzle. Pick a board (square, pentagon, hexagon or heptagon: 4–7 numbers). Exactly one number is the sum of two others; tap it. 60-second rounds, streaks (Blaze grows at x5, x10 and x20), a 3-second penalty for a wrong tap, and a leaderboard per board.
 

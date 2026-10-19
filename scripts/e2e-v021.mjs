@@ -1,4 +1,4 @@
-// e2e v0.2.1+ (default expects v0.2.3.1, shots v0231-*; EXPECT_VER / SHOT_TAG override): node scripts/e2e-v021.mjs [baseUrl]. GD review fixes: ~3 s solve, full-size ten-frames in rows, hoppers leave + keep colour, wrong caption in the sum strip, Bond Lab slider/ten-frames/quiz label. Plus all v0.2 checks. Teaching solve stages, timer pause, skip, chip replay, wrong caption, Bond Lab, reduced motion, FPS @4x CPU.
+// e2e v0.2.1+ (default expects v0.2.3.2, shots v0232-*; EXPECT_VER / SHOT_TAG override): node scripts/e2e-v021.mjs [baseUrl]. GD review fixes: ~3 s solve, full-size ten-frames in rows, hoppers leave + keep colour, wrong caption in the sum strip, Bond Lab slider/ten-frames/quiz label. Plus all v0.2 checks. Teaching solve stages, timer pause, skip, chip replay, wrong caption, Bond Lab, reduced motion, FPS @4x CPU.
 import { createServer } from 'http';
 import { readFileSync, existsSync, statSync, mkdirSync, writeFileSync } from 'fs';
 import { join, extname } from 'path';
@@ -22,7 +22,7 @@ const errs = [], fails = [], log = [], perf = {};
 const watch = pg => { pg.on('pageerror', e => errs.push(e.message)); pg.on('console', m => { if (m.type() === 'error') errs.push(m.text()); }); };
 watch(page);
 const check = (c, msg) => { (c ? log : fails).push((c ? 'ok   ' : 'FAIL ') + msg); };
-const TAG = process.env.SHOT_TAG || 'v0231', VER = process.env.EXPECT_VER || 'v0.2.3.1';
+const TAG = process.env.SHOT_TAG || 'v0232', VER = process.env.EXPECT_VER || 'v0.2.3.2';
 const shot = n => page.screenshot({ path: `${SHOTS}${TAG}-${n}.png` });
 const kk = (f, a) => page.evaluate(f, a);
 const wait = ms => page.waitForTimeout(ms);
@@ -102,8 +102,8 @@ await stage('clear', 4000);
 check((await kk(() => document.getElementById('sum').textContent)) === '?+?=?', 'clear: the bond fades and "? + ? = ?" comes back');
 check((await kk(() => [...document.querySelectorAll('#fx .bnode')].map(e => e.textContent).join())) === '19,7,12', 'bond: whole 19 on top, parts 7 and 12');
 check((await kk(() => document.querySelector('#fx .bondcap')?.textContent)) === '7 and 12 make 19', 'bond caption "7 and 12 make 19"');
-const capCol = await kk(() => ({ p0: getComputedStyle(document.querySelector('#fx .bondcap .p0')).color, ctr: getComputedStyle(document.documentElement).getPropertyValue('--lblue').trim() }));
-check(capCol.p0 === 'rgb(91, 141, 239)' && capCol.ctr.toLowerCase() === '#9cc0ff', 'v0.2.3.1: caption smaller-part word is #5b8def, counters/tiles token stays #9cc0ff ' + JSON.stringify(capCol));
+const capCol = await kk(() => ({ p0: getComputedStyle(document.querySelector('#fx .bondcap .p0')).color, p1: getComputedStyle(document.querySelector('#fx .bondcap .p1')).color, ctr: getComputedStyle(document.documentElement).getPropertyValue('--lblue').trim() }));
+check(capCol.p0 === 'rgb(82, 135, 234)' && capCol.p1 === 'rgb(58, 123, 255)' && capCol.ctr.toLowerCase() === '#9cc0ff', 'v0.2.3.2: caption smaller-part word is #5287ea, larger-part word stays #3a7bff, counters/tiles token stays #9cc0ff ' + JSON.stringify(capCol));
 await waitPlay(); const teachTotal = Date.now() - tapAt; perf.fullSolveMs = teachTotal;
 check(teachTotal > 5000 && teachTotal < 6300, `full lesson is ~5-6 s (${teachTotal} ms incl. test round-trips)`);
 clearInterval(sampler); await wait(150);
