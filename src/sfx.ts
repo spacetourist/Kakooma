@@ -29,7 +29,8 @@ export const sfx = {
   // teaching solve
   count(i: number, o?: PlayOpts): void { log('count', [i], o); },
   hop(o?: PlayOpts): void { log('hop', [], o); },
-  makeTen(o?: PlayOpts): void { log('makeTen', [], o); },
+  makeTen(o?: PlayOpts): void { log('makeTen', [], o); },                   // v0.3.3: no longer called by the teaching solve (the ten accent is count(9))
+  total,                                                                // v0.3.3: see total() below
   bond(o?: PlayOpts): void { log('bond', [], o); },
   partPop(i: number, o?: PlayOpts): void { log('partPop', [i], o); },   // 0 = smaller part, 1 = larger
   cheer(o?: PlayOpts): void { log('cheer', [], o); },
@@ -44,3 +45,5 @@ export const sfx = {
 };
 /** Cancel every scheduled/playing sound (the pack fades over 60 ms). Called whenever a lesson is cut short. */
 export function stopAll(): void { log('stopAll', []); }
+/** v0.3.3: the counter tile turns green on the final count (150 ms after partPop(1), +300 ms after the last dot). Silent stub. */
+export function total(o?: PlayOpts): void { log('total', [], o); }

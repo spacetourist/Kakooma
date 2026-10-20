@@ -41,7 +41,7 @@ export function teach(ctx: TeachCtx, a: number, b: number): TeachRun {
   const gap = 3, pad = 5, between = 10;
   const cs = Math.max(14, Math.min(22, Math.floor(((w - 12 - between * (perRow - 1)) / perRow - 2 * pad - 4 * gap) / 5)));
   const d = { w: 5 * cs + 4 * gap + 2 * pad, h: 2 * cs + gap + 2 * pad, cs, gap, pad };
-  const fh = d.h, rowGap = nRows > 1 ? 30 : 14, /* v0.3.2: room for a part label between rows */ top0 = nRows === 1 ? h * 0.24 : h * (nRows === 2 ? 0.17 : 0.11);
+  const fh = d.h, rowGap = 14, top0 = nRows === 1 ? h * 0.24 : h * 0.18;
   const rowY = Array.from({ length: nRows }, (_, r) => top0 + r * (fh + rowGap));
   const pos: { x: number; y: number }[] = [];
   for (let r = 0; r < nRows; r++) {
@@ -53,12 +53,13 @@ export function teach(ctx: TeachCtx, a: number, b: number): TeachRun {
     const p = pos[s.box], col = s.cell % 5, row = Math.floor(s.cell / 5);
     return { x: p.x + pad + col * (cs + gap) + cs / 2, y: p.y + pad + row * (cs + gap) + cs / 2, s: 1 };
   };
-  const capY = rowY[nRows - 1] + fh / 2 + 18;
-  // v0.3.2 counter: the answer tile, scaled up (~120 px) just under the frames, below the part labels
-  const lastBottom = rowY[nRows - 1] + fh / 2, LBL = 26;
-  const K = Math.max(1.05, Math.min(120 / 72, (h - lastBottom - LBL - 24) / 72)); // clear of the "Tap to skip" hint
-  const C = { x: w / 2, y: lastBottom + LBL + 36 * K };
-  const A = { x: w / 2, y: h - 46 }; // the answer node under the frames; it later rises to be the bond's whole
+  // v0.3.3: the make-ten caption sits between the frames and the counter; the part key sits above the frames
+  const lastBottom = rowY[nRows - 1] + fh / 2, CAPH = 46;
+  const capY = lastBottom + 10;
+  const K = Math.max(1.05, Math.min(120 / 72, (h - lastBottom - CAPH - 24) / 72)); // counter ~120 px, clear of the "Tap to skip" hint
+  const C = { x: w / 2, y: lastBottom + CAPH + 36 * K };
+  const A = { x: w / 2, y: h - 46 }; // the answer node's home box; it is shown at C (scale K) and rises from there to the bond's whole
+  const keyY = rowY[0] - fh / 2 - 30;
 
   // ---------- elements ----------
   const plate = add(document.createElement('div')); plate.className = 'plate'; plate.style.width = w + 'px'; plate.style.height = h + 'px'; plate.style.opacity = '0';
@@ -74,23 +75,19 @@ export function teach(ctx: TeachCtx, a: number, b: number): TeachRun {
     e.style.width = e.style.height = D + 'px'; e.style.margin = `${-D / 2}px 0 0 ${-D / 2}px`; e.style.opacity = '0';
     return e;
   });
-  const caps = plan.captions.map((t, i) => {
-    const e = add(document.createElement('div')); e.className = 'tcap'; e.textContent = t;
-    e.style.top = capY + i * 34 + 'px'; e.style.opacity = '0';
-    return e;
-  });
+  const bridgeTen = plan.tens.find(t => t.caption);
+  const cap = add(document.createElement('div')); cap.className = 'tcap mk10'; cap.textContent = bridgeTen?.caption ?? (plan.c < 10 ? `${plan.S} + ${plan.L} = ${plan.c}` : ''); cap.style.top = capY + 'px'; cap.style.opacity = '0'; // under ten: the sum, shown on the green total
+  // part key above the frames: a light-blue dot + the smaller part, a dark-blue dot + the larger part
+  const key = add(document.createElement('div')); key.className = 'pkey'; key.style.top = keyY + 'px';
+  const keyItems = [plan.S, plan.L].map((v, i) => { const e = document.createElement('span'); e.className = `k p${i}`; e.innerHTML = `<i></i><b>${v}</b>`; e.style.opacity = '0'; key.appendChild(e); return e; });
   const ans = add(document.createElement('div')); ans.className = 'bnode whole counting'; ans.textContent = '0';
   ans.style.width = ans.style.height = '72px'; ans.style.left = A.x - 36 + 'px'; ans.style.top = A.y - 36 + 'px'; ans.style.opacity = '0'; ans.style.zIndex = '2';
   const skipHint = add(document.createElement('div')); skipHint.className = 'skiphint'; skipHint.textContent = 'Tap to skip';
   anim(skipHint, [{ opacity: 0 }, { opacity: 1 }], { duration: 200, delay: 400, fill: 'both' });
 
   const fadeIn = (e: Element, ms = 220, delay = 0, dy = 6) => anim(e, [{ opacity: 0, translate: `0 ${dy}px` }, { opacity: 1, translate: '0 0' }], { duration: ms, delay, fill: 'both', easing: 'ease-out' });
+  const later = (ms: number, f: () => void) => setTimeout(() => { if (!over) f(); }, ms);
 
-  /*
-   * v0.2.1 timeline (~3.0 s for 7 + 12): fly 0-0.7 s, hop + "make ten" 0.7-1.1 s, second caption 1.4 s,
-   * then at ~1.85 s the make-ten fades WHILE the counters stream into the whole and the bond draws; confetti and
-   * Blaze's hop play over the bond (no dead time with only the answer showing), hold, done ~3.0 s.
-   */
   (async () => {
     const from = [ctx.centre(ctx.iS), ctx.centre(ctx.iL)];
     dim(ctx.tiles.map((_, i) => i).filter(i => i < ctx.n && i !== ctx.iS && i !== ctx.iL && i !== ctx.iC));
@@ -102,39 +99,34 @@ export function teach(ctx: TeachCtx, a: number, b: number): TeachRun {
     anim(ans, reduced ? [{ opacity: 0, translate: dC, scale: String(K) }, { opacity: 1, translate: dC, scale: String(K) }]
       : [{ opacity: 0, translate: dC, scale: String(K * 0.5) }, { opacity: 1, translate: dC, scale: String(K) }], { duration: 240, delay: reduced ? 0 : 220, fill: 'both', easing: 'cubic-bezier(.34,1.56,.64,1)' });
     /*
-     * 1. count (v0.3.2, GD layout): the smaller part's dots (light blue) leave its tile one at a time and land in the
-     * ten-frame cells, left to right; the counter (the answer tile, big, under the frames) ticks up by exactly 1 per dot
-     * with a 1.12x pop. Then the larger part's dots (dark blue) continue the count. Each group gets its number as a label
-     * when done (partPop); the final count turns the tile green (bond). The dots stay where they land for make-ten.
-     * Reduced motion: the dots appear in their cells (no flight) and the counter steps at the same pace, no pop.
+     * 1. count + make ten (v0.3.3): the smaller part's dots (light blue) land one at a time in the cells, left to right;
+     * the larger part's dots (dark blue) carry on into the empty cells of the same frame, then the next frames. The
+     * counter (the answer tile, big, under the frames) goes up by exactly 1 per dot with a 1.12x pop. Each time a frame
+     * completes it rings green and the counter flashes a green ring; the make-ten frame (where the colours meet) also
+     * shows "7 + 3 = 10" and the count holds ~0.6 s on it. Each part's key entry appears when it is done (partPop);
+     * the final count turns the tile green (total). Reduced motion: no flight (dots appear in place), no pops.
      */
     ctx.onStage?.('fly');
-    const order = [0, 1].flatMap(part => plan.counters.map((c, j) => ({ c, j })).filter(x => x.c.part === part));
-    const tm = countTiming(ctx.pace ?? 'medium', plan.S, plan.L), T0 = 360; // frames are in by T0
-    order.forEach(({ c, j }, k) => {
+    const tm = countTiming(ctx.pace ?? 'medium', plan.S, plan.L, plan.bridge), T0 = 360; // frames are in by T0
+    plan.counters.forEach((c, k) => {
       const t = cell(c.slot), s = from[c.part], start = T0 + tm.land[k] - tm.fly;
-      if (reduced) { anim(dots[j], [{ transform: T(t.x, t.y), opacity: 0 }, { transform: T(t.x, t.y), opacity: 1 }], { duration: 120, delay: start + tm.fly - 120, fill: 'both' }); return; }
+      if (reduced) { anim(dots[k], [{ transform: T(t.x, t.y), opacity: 0 }, { transform: T(t.x, t.y), opacity: 1 }], { duration: 120, delay: start + tm.fly - 120, fill: 'both' }); return; }
       const mx = (s.x + t.x) / 2 + (c.part ? 24 : -24), my = Math.min(s.y, t.y) - 34;
-      anim(dots[j], [
+      anim(dots[k], [
         { transform: T(s.x, s.y, 0.4), opacity: 0 },
         { transform: T(s.x, s.y - 6, 1.1), opacity: 1, offset: 0.18 },
         { transform: T(mx, my, 1), opacity: 1, offset: 0.6 },
         { transform: T(t.x, t.y), opacity: 1 },
       ], { duration: tm.fly, delay: start, easing: 'cubic-bezier(.4,0,.3,1)', fill: 'both' });
     });
-    // part labels, centred under each group's cells
-    const groupLbl = (part: 0 | 1) => {
-      const cs2 = order.filter(o => o.c.part === part).map(o => cell(o.c.slot));
-      const boxes = new Set(order.filter(o => o.c.part === part).map(o => o.c.slot.box));
-      const e = add(document.createElement('div')); e.className = `plabel p${part}`; e.textContent = String(part ? plan.L : plan.S);
-      e.style.left = cs2.reduce((a, p) => a + p.x, 0) / cs2.length + 'px';
-      e.style.top = Math.max(...[...boxes].map(b => pos[b].y + fh)) + 3 + 'px'; e.style.opacity = '0';
-      return e;
+    const tenAt = new Map(plan.tens.map(t => [t.n, t]));
+    const ring = (frame: HTMLElement, ms: number) => {
+      frame.classList.add('ten'); ans.classList.add('flash'); later(ms, () => ans.classList.remove('flash'));
+      if (!reduced) anim(frame, [{ scale: '1' }, { scale: '1.06', offset: 0.4 }, { scale: '1' }], { duration: 260 });
     };
-    const labels = [groupLbl(0), groupLbl(1)];
-    // group ends, staggered so the sounds never stack on the last dot (Audio Engineer): each part's label + partPop
-    // 150 ms after its last dot lands; the tile turns green + bond() 400 ms after the second label
-    const POP_AFTER = 150, GREEN_AFTER = 400;
+    // group ends, staggered so the sounds never stack on the last dot (Audio Engineer): each part's key + partPop
+    // 150 ms after its last dot's actual frame; the tile turns green + total() 150 ms after the second partPop (+300 ms after the last dot)
+    const POP_AFTER = 150, GREEN_AFTER = 150, CAP_MS = 750;
     const evAt = [T0 + tm.land[plan.S - 1] + POP_AFTER, T0 + tm.land[plan.c - 1] + POP_AFTER, T0 + tm.land[plan.c - 1] + POP_AFTER + GREEN_AFTER];
     let ev = 0;
     // the counter: one rAF loop, at most +1 per frame, so every dot visibly adds exactly one (count(i) on that frame)
@@ -149,18 +141,27 @@ export function teach(ctx: TeachCtx, a: number, b: number): TeachRun {
           ans.textContent = String(shown);
           ans.classList.toggle('c1', part === 1);
           (window as any).__kkCount.push([shown, Math.round(now)]);
-          sfx.count(k); // zero-based running total (the dot that makes 10 is count(9)), on the frame this dot lands
+          sfx.count(k); // zero-based running total (the dot that makes 10 is count(9), the ten accent), on the frame this dot lands
           if (!reduced) anim(ans, [{ transform: 'scale(1)' }, { transform: 'scale(1.12)', offset: 0.35 }, { transform: 'scale(1)' }], { duration: Math.min(220, tm.every + 40), easing: 'ease-out' });
+          // a frame completes: ring it + flash the counter (no extra sound: count(i) already carries the ten accent)
+          const ten = tenAt.get(shown);
+          if (ten) {
+            if (ten.caption) {
+              ring(frames[ten.box], CAP_MS); fadeIn(cap, 160, 0, 4); ctx.onStage?.('ten');
+              if (shown < plan.c) later(CAP_MS, () => anim(cap, [{ opacity: 1 }, { opacity: 0 }], { duration: 160, fill: 'forwards' }));
+            } else ring(frames[ten.box], 380);
+          }
           // keep the stagger relative to the frame the dot was actually counted on (a dropped/stalled frame must not
           // pull partPop onto the same frame as the last count())
           if (shown === plan.S) evAt[0] = Math.max(evAt[0], now + POP_AFTER);
           if (shown === plan.c) { evAt[1] = Math.max(evAt[1], now + POP_AFTER); evAt[2] = Math.max(evAt[2], evAt[1] + GREEN_AFTER); }
         }
-        // group events on their own frames (label + partPop together; green + bond together)
+        // group events on their own frames (key + partPop together; green + total together)
         if (ev < 3 && now >= evAt[ev] && (ev === 0 ? shown >= plan.S : shown >= plan.c)) {
-          if (ev < 2) { fadeIn(labels[ev], 200, 0, 4); sfx.partPop(ev); if (ev === 1) evAt[2] = Math.max(evAt[2], now + GREEN_AFTER); }
+          if (ev < 2) { fadeIn(keyItems[ev], 200, 0, 4); sfx.partPop(ev); if (ev === 1) evAt[2] = Math.max(evAt[2], now + GREEN_AFTER); }
           else {
-            ans.classList.remove('counting', 'c1'); sfx.makeTen(); ctx.onStage?.('counted');
+            ans.classList.remove('counting', 'c1', 'flash'); sfx.total(); ctx.onStage?.('counted');
+            if (!bridgeTen && plan.c < 10) fadeIn(cap, 200, 0, 4);
             if (!reduced) anim(ans, [{ transform: 'scale(1)' }, { transform: 'scale(1.12)', offset: 0.35 }, { transform: 'scale(1)' }], { duration: 260, easing: 'ease-out' });
           }
           ev++;
@@ -171,43 +172,16 @@ export function teach(ctx: TeachCtx, a: number, b: number): TeachRun {
       requestAnimationFrame(step);
     });
     if (over) return;
-    // a beat on the green total, then the counter glides down to its usual place under the make-ten, labels fade
-    if (await wait(reduced ? 300 : tm.every > 200 ? 450 : 320)) return;
-    labels.forEach(l => anim(l, [{ opacity: 1 }, { opacity: 0 }], { duration: 200, fill: 'forwards' }));
-    anim(ans, [{ translate: dC, scale: String(K) }, { translate: '0 0', scale: '1' }], { duration: reduced ? 1 : 320, easing: 'cubic-bezier(.3,.8,.4,1)', fill: 'forwards' });
-    if (await wait(reduced ? 150 : 340)) return;
-    // 2. make ten: k counters hop OUT of their frame into the open cells (they keep their own colour), then captions
-    if (plan.k) {
-      const hoppers = plan.counters.map((c, j) => ({ c, j })).filter(x => x.c.hop);
-      let end = 0;
-      hoppers.forEach(({ c, j }, m) => {
-        const f = cell(c.slot), t = cell(c.hop!);
-        const kf = reduced ? [{ transform: T(f.x, f.y) }, { transform: T(t.x, t.y) }]
-          : [{ transform: T(f.x, f.y) }, { transform: T((f.x + t.x) / 2, Math.min(f.y, t.y) - 30, 1.15), offset: 0.5 }, { transform: T(t.x, t.y) }];
-        anim(dots[j], kf, { duration: reduced ? 1 : 300, delay: reduced ? 0 : m * 30, easing: 'ease-in-out', fill: 'both' });
-        end = Math.max(end, (reduced ? 0 : m * 30) + 300);
-      });
-      ctx.onStage?.('hop'); sfx.hop();
-      if (await wait(reduced ? 150 : end)) return;
-      const tgt = frames[plan.counters.find(c => c.hop)!.hop!.box];
-      tgt.classList.add('ten'); sfx.makeTen(); ctx.onStage?.('ten');
-      if (!reduced) anim(tgt, [{ scale: '1' }, { scale: '1.08', offset: 0.4 }, { scale: '1' }], { duration: 280 });
-      fadeIn(caps[0]);
-      if (await wait(reduced ? 400 : 320)) return;
-      fadeIn(caps[1]); ctx.onStage?.('ten2');
-      if (await wait(reduced ? 600 : 420)) return;
-    } else {
-      if (plan.c === 10) frames[0].classList.add('ten'); // v0.3: exactly ten fills the one frame: ring it like a made ten
-      fadeIn(caps[0]); ctx.onStage?.('sum');
-      if (await wait(reduced ? 700 : 560)) return;
-    }
+    // a beat on the green total (v0.3.3: no separate make-ten step any more; it happened during the count)
+    if (await wait(reduced ? 450 : tm.every > 200 ? 500 : 400)) return;
     // 3. handover (v0.2.2, unchanged): the make-ten (frames, captions AND counters) fades out in place to opacity 0
     // first; counters never move during the fade. Only then does the answer rise on its own into the whole.
     ctx.onStage?.('absorb');
     const W = { x: w / 2, y: h * 0.27 }, P = [{ x: w / 2 - 88, y: h * 0.63 }, { x: w / 2 + 88, y: h * 0.63 }];
     const FADE = 200, RISE = reduced ? 1 : 300, B = FADE + 20; // B: the answer starts rising (just after the fade)
-    [...frames, ...caps, ...dots].forEach(e => anim(e, [{ opacity: 1 }, { opacity: 0 }], { duration: FADE, fill: 'both', easing: 'ease-in' }));
-    anim(ans, [{ translate: '0 0', scale: '1' }, { translate: `${W.x - A.x}px ${W.y - A.y}px`, scale: String(88 / 72) }], { duration: RISE, delay: B, easing: 'cubic-bezier(.3,.8,.4,1)', fill: 'both', composite: 'replace' });
+    [...frames, cap, key, ...dots].forEach(e => anim(e, [{ opacity: getComputedStyle(e).opacity }, { opacity: 0 }], { duration: FADE, fill: 'both', easing: 'ease-in' }));
+    // v0.3.3: the green counter rises straight from where it counted (no glide back under a make-ten step)
+    anim(ans, [{ translate: dC, scale: String(K) }, { translate: `${W.x - A.x}px ${W.y - A.y}px`, scale: String(88 / 72) }], { duration: RISE, delay: B, easing: 'cubic-bezier(.3,.8,.4,1)', fill: 'both', composite: 'replace' });
     sfx.bond(inMs(B)); // the answer rises
     /*
      * 4. bond (v0.2.3, GD spec). Clock 0 = the answer reaches the top.

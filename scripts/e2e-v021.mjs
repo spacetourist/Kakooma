@@ -35,7 +35,7 @@ const stage = (g, t = 6000) => page.waitForFunction(g => window.__kk.teachStage 
 const queue = list => kk(l => { window.__kkNext = l; }, list);
 const P = (nums, a, b) => ({ nums, a, b, answer: a + b });
 const clock = () => kk(() => ({ rem: window.__kk.left - (window.__kk.running ? performance.now() - window.__kk.since : 0), left: window.__kk.left, running: window.__kk.running, phase: window.__kk.phase, stage: window.__kk.teachStage }));
-const caps = () => kk(() => [...document.querySelectorAll('#fx .tcap')].map(e => e.textContent));
+const caps = () => kk(() => [...document.querySelectorAll('#fx .tcap:not(.bondcap)')].map(e => e.textContent));
 const tapAnywhere = () => page.touchscreen.tap(206, 640);
 // where every counter sits now: index of the ten-frame whose rect holds its centre (-1 = none)
 const frameCounts = () => kk(() => { const fs = [...document.querySelectorAll('#fx .tf')].map(f => f.getBoundingClientRect()); const n = fs.map(() => ({ p0: 0, p1: 0 }));
@@ -72,11 +72,11 @@ await stage('fly'); await wait(380); await shot('03-solve-2-fly');
 check((await kk(() => document.querySelectorAll('#fx .ctr').length)) === 19, '19 counters burst out (7 light + 12 blue)');
 check((await kk(() => [document.querySelectorAll('#fx .ctr.p0').length, document.querySelectorAll('#fx .ctr.p1').length].join())) === '7,12', 'two shades: 7 light, 12 blue');
 await stage('ten'); await wait(200); await shot('04-solve-3-maketen');
-await stage('ten2'); await wait(300); await shot('05-solve-3b-maketen-captions');
-const c1 = await caps(); check(c1.join('|') === '7 + 3 = 10|10 + 9 = 19', 'make-ten captions ' + c1.join(' / '));
+await stage('counted'); await wait(300); await shot('05-solve-3b-counted');
+const c1 = await caps(); check(c1.join('|') === '7 + 3 = 10', 'v0.3.3 in-count make-ten caption ' + c1.join(' / '));
 const fc = await frameCounts();
-check(fc.mini === 0 && fc.w.length === 3 && new Set(fc.w).size === 1 && new Set(fc.top).size === 1, `7 + 12: three full-size ten-frames in one row ${JSON.stringify({ w: fc.w, top: fc.top })}`);
-check(JSON.stringify(fc.n) === JSON.stringify([{ p0: 7, p1: 3 }, { p0: 0, p1: 7 }, { p0: 0, p1: 2 }]), `hoppers left their frame and keep their colour: new ten = 7 light + 3 blue, source 7 blue, ones 2 blue ${JSON.stringify(fc.n)}`);
+check(fc.mini === 0 && fc.w.length === 2 && new Set(fc.w).size === 1 && new Set(fc.top).size === 1, `7 + 12: two full-size ten-frames in one row ${JSON.stringify({ w: fc.w, top: fc.top })}`);
+check(JSON.stringify(fc.n) === JSON.stringify([{ p0: 7, p1: 3 }, { p0: 0, p1: 9 }]), `v0.3.3 continuous fill, each dot keeps its colour: first ten = 7 light + 3 blue, then 9 blue ${JSON.stringify(fc.n)}`);
 await stage('absorb');
 const ansTop = () => kk(() => Math.round(document.querySelector('#fx > .bnode.whole').getBoundingClientRect().top));
 const top0 = await ansTop(); await wait(100);
@@ -105,7 +105,7 @@ check((await kk(() => document.querySelector('#fx .bondcap')?.textContent)) === 
 const capCol = await kk(() => ({ p0: getComputedStyle(document.querySelector('#fx .bondcap .p0')).color, p1: getComputedStyle(document.querySelector('#fx .bondcap .p1')).color, ctr: getComputedStyle(document.documentElement).getPropertyValue('--lblue').trim() }));
 check(capCol.p0 === 'rgb(82, 135, 234)' && capCol.p1 === 'rgb(58, 123, 255)' && capCol.ctr.toLowerCase() === '#9cc0ff', 'v0.2.3.2: caption smaller-part word is #5287ea, larger-part word stays #3a7bff, counters/tiles token stays #9cc0ff ' + JSON.stringify(capCol));
 await waitPlay(); const teachTotal = Date.now() - tapAt; perf.fullSolveMs = teachTotal;
-check(teachTotal > 7000 && teachTotal < 9500, `full lesson (v0.3.2 counting, Hard pace) is ~7.5-9 s (${teachTotal} ms incl. test round-trips)`);
+check(teachTotal > 6000 && teachTotal < 8500, `full lesson (v0.3.3 count + in-count make-ten, Hard pace) is ~6.5-8 s (${teachTotal} ms incl. test round-trips)`);
 clearInterval(sampler); await wait(150);
 const during = samples.filter(s => s.phase === 'feedback');
 check(during.length > 15 && during.every(s => !s.running && s.left === during[0].left) && Math.abs(during[0].left - before.rem) < 600, `timer paused for the whole teaching solve (${during.length} samples over ${teachTotal} ms, stayed at ${Math.round(during[0]?.left)} ms)`);
@@ -113,7 +113,7 @@ const after = await clock(); check(after.running && after.phase === 'play', 'tim
 
 // ---------- full solve under ten: 2 + 5 = 7 ----------
 await wait(300); await tapTile(await answerIdx());
-await stage('sum'); await wait(250); await shot('08-under10-frame');
+await stage('counted'); await wait(250); await shot('08-under10-frame');
 const c2 = await caps(); check(c2.join('|') === '2 + 5 = 7' && (await kk(() => document.querySelectorAll('#fx .tf').length)) === 1, 'under ten: one frame, caption "2 + 5 = 7"');
 await stage('cheer'); await wait(250); await shot('09-under10-bond');
 await waitPlay();
@@ -175,8 +175,8 @@ await page.locator('#tray .chip').last().scrollIntoViewIfNeeded();
 await tapEl('#tray .chip >> nth=-1'); await wait(80);
 const rp = await kk(() => ({ phase: window.__kk.phase, nums: window.__kk.puzzle.nums.join(), running: window.__kk.running }));
 check(rp.phase === 'replay' && rp.nums === '7,9,12,19,4' && !rp.running, 'chip replay: board shows 7 + 12 = 19, timer paused');
-await stage('ten2', 8000); await wait(250); await shot('14-chip-replay');
-check((await caps()).join('|') === '7 + 3 = 10|10 + 9 = 19', 'replay shows the make-ten captions');
+await stage('counted', 8000); await wait(250); await shot('14-chip-replay');
+check((await caps()).join('|') === '7 + 3 = 10', 'replay shows the make-ten caption');
 await stage('cheer', 8000); await wait(200); await shot('15-chip-replay-bond');
 await waitPlay();
 const rp2 = await kk(() => ({ nums: window.__kk.puzzle.nums.join(), running: window.__kk.running, left: window.__kk.left }));
@@ -262,13 +262,13 @@ await tapEl('#picker [data-n="7"]'); await wait(400);
 await queue([P([28, 29, 57, 2, 5, 13, 40], 28, 29)]);
 await tapEl('#mStart'); await waitPlay(); await wait(300);
 await tapTile(await answerIdx());
-await stage('ten2'); await wait(200); await shot('21-big-sum-n7');
+await stage('counted'); await wait(200); await shot('21-big-sum-n7');
 const bf = await frameCounts();
 const bg = await kk(() => ({ caps: [...document.querySelectorAll('#fx .tcap:not(.bondcap)')].map(e => e.textContent), frames: document.querySelectorAll('#fx .tf').length, minis: document.querySelectorAll('#fx .tf.mini').length, ctr: document.querySelectorAll('#fx .ctr').length,
   inside: [...document.querySelectorAll('#fx .tf')].every(e => { const r = e.getBoundingClientRect(), b = document.getElementById('board').getBoundingClientRect(); return r.left >= b.left - 1 && r.right <= b.right + 1; }) }));
-check(bg.caps.join('|') === '28 + 2 = 30|30 + 27 = 57' && bg.frames === 6 && bg.minis === 0 && bg.ctr === 57 && bg.inside, 'big sum 28 + 29: ' + JSON.stringify(bg));
+check(bg.caps.join('|') === '28 + 2 = 30' && bg.frames === 6 && bg.minis === 0 && bg.ctr === 57 && bg.inside, 'big sum 28 + 29: ' + JSON.stringify(bg));
 check(new Set(bf.w).size === 1 && new Set(bf.top).size === 2 && bf.top.filter(t => t === bf.top[0]).length === 3, `28 + 29: 6 full-size frames (${bf.w[0]} px wide), 2 rows of 3 ${JSON.stringify(bf.top)}`);
-check(JSON.stringify(bf.n.map(x => x.p0 + '/' + x.p1)) === JSON.stringify(['10/0', '10/0', '8/2', '0/8', '0/10', '0/9']), 'big sum: each part keeps its colour, hoppers left the source ' + JSON.stringify(bf.n.map(x => x.p0 + '/' + x.p1)));
+check(JSON.stringify(bf.n.map(x => x.p0 + '/' + x.p1)) === JSON.stringify(['10/0', '10/0', '8/2', '0/10', '0/10', '0/7']), 'big sum (v0.3.3 continuous fill): each part keeps its colour, 29 carries on into the 28s frame ' + JSON.stringify(bf.n.map(x => x.p0 + '/' + x.p1)));
 await tapAnywhere(); await waitPlay(); await tapEl('#gQuit'); await wait(100);
 
 // ---------- FPS with 4x CPU throttling ----------
@@ -350,7 +350,7 @@ await queue([P([7, 9, 12, 19, 4], 7, 12)]);
 await tapEl('#mStart'); await waitPlay(); await wait(300);
 const rs = Date.now(); await tapTile(await answerIdx()); await wait(60);
 check((await kk(() => document.querySelectorAll('#fx .ring').length)) === 0, 'reduced motion: no ripple rings');
-await stage('ten2'); await wait(150); await shot('22-reduced-maketen');
+await stage('ten'); await wait(150); await shot('22-reduced-maketen');
 await stage('cheer'); await wait(200);
 check((await kk(() => document.querySelectorAll('#fx .confetti').length)) === 0, 'reduced motion: no confetti');
 await shot('23-reduced-bond');

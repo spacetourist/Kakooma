@@ -362,7 +362,7 @@ function endRound() {
   $('rStreak').textContent = `x${e.streak}`; $('rAvg').textContent = sec(avg); $('rMiss').textContent = String(e.miss);
   const q = qualifies(e);
   const pos = [...boardFor(e.lv, e.n), e].sort(cmp).indexOf(e) + 1;
-  const top = q && pos === 1; // v0.3.1: a new #1 on this level + shape is an event (gold cards, Blaze in shades)
+  const top = q && pos === 1; // v0.3.1: a new #1 on this level + shape is an event (gold #1 card, Blaze in shades)
   $('rRank').innerHTML = q
     ? `<span class="pos">#${pos}${top ? '<i class="star" aria-label="new top score">★</i>' : ''}</span><span>${pos === 1 ? 'New top score' : 'Leaderboard place'} on ${LEVEL_NAME[e.lv]} ${SHAPE[e.n]}</span>`
     : `<span class="pos na">—</span><span>${e.score ? `Not in the ${LEVEL_NAME[e.lv]} ${SHAPE[e.n]} top 10 this time` : 'Solve one to get on the board'}</span>`;
@@ -370,7 +370,7 @@ function endRound() {
   $('nameCard').classList.toggle('hidden', !q);
   nameIn.value = ''; renderSlots();
   fromGame = true;
-  $('rRank').classList.toggle('gold', top); $('rScoreCard').classList.toggle('gold', top);
+  $('rRank').classList.toggle('gold', top); // v0.3.3 (GD): only the #1 card is gold; the score card stays white
   $('rBlaze').classList.toggle('cool', top);
   show('results');
   sfx.timeUp();

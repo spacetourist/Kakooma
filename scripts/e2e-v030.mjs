@@ -172,14 +172,14 @@ async function teachShot(lv, n, puzzle, name, waitStage) {
   await page.waitForFunction(() => window.__kk.phase === 'play', null, { timeout: 9000 });
   return info;
 }
-let t = await teachShot('easy', 4, { nums: [3, 7, 10, 1], a: 3, b: 7, answer: 10 }, '07-teach-easy-3-7', 'sum');
+let t = await teachShot('easy', 4, { nums: [3, 7, 10, 1], a: 3, b: 7, answer: 10 }, '07-teach-easy-3-7', 'counted');
 check(t.frames === 1 && t.ten === 1 && t.caps.join('|') === '3 + 7 = 10', 'Easy 3 + 7 = 10: one full ten-frame, ringed, one caption (no "10 + 0 = 10") ' + JSON.stringify(t));
-t = await teachShot('easy', 5, { nums: [2, 5, 7, 10, 1], a: 2, b: 5, answer: 7 }, '07b-teach-easy-2-5', 'sum');
-check(t.frames === 1 && t.ten === 0 && t.caps.join('|') === '2 + 5 = 7', 'under ten still skips make-ten ' + JSON.stringify(t));
-t = await teachShot('hard', 7, { nums: [24, 26, 50, 1, 3, 9, 41], a: 24, b: 26, answer: 50 }, '08-teach-hard-24-26', 'ten2');
-check(t.frames === 6 && t.rows === 2 && t.inside && t.w.length === 1 && t.caps.join('|') === '24 + 6 = 30|30 + 20 = 50', 'Hard 24 + 26 = 50: six full-size frames in two rows, inside the board ' + JSON.stringify(t));
-t = await teachShot('hard', 5, { nums: [1, 49, 50, 4, 12], a: 1, b: 49, answer: 50 }, '08b-teach-hard-1-49', 'ten2');
-check(t.frames === 6 && t.rows === 2 && t.inside && t.w.length === 1, 'Hard 1 + 49: rows of 3, full size, inside the board ' + JSON.stringify(t));
+t = await teachShot('easy', 5, { nums: [2, 5, 7, 10, 1], a: 2, b: 5, answer: 7 }, '07b-teach-easy-2-5', 'counted');
+check(t.frames === 1 && t.ten === 0 && t.caps.join('|') === '2 + 5 = 7', 'under ten: one frame, no ten, the sum caption ' + JSON.stringify(t));
+t = await teachShot('hard', 7, { nums: [24, 26, 50, 1, 3, 9, 41], a: 24, b: 26, answer: 50 }, '08-teach-hard-24-26', 'counted');
+check(t.frames === 5 && t.ten === 5 && t.rows === 2 && t.inside && t.w.length === 1 && t.caps.join('|') === '24 + 6 = 30', 'Hard 24 + 26 = 50 (v0.3.3): exactly five full frames in two rows, inside the board ' + JSON.stringify(t));
+t = await teachShot('hard', 5, { nums: [1, 49, 50, 4, 12], a: 1, b: 49, answer: 50 }, '08b-teach-hard-1-49', 'counted');
+check(t.frames === 5 && t.rows === 2 && t.inside && t.w.length === 1, 'Hard 1 + 49: rows of 3, full size, inside the board ' + JSON.stringify(t));
 
 check(errs.length === 0, 'no page errors ' + JSON.stringify(errs.slice(0, 3)));
 console.log(log.join('\n')); if (fails.length) console.log(fails.join('\n'));

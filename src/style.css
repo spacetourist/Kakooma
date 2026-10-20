@@ -151,7 +151,7 @@ button { font: inherit; color: inherit; border: 0; background: none; padding: 0;
 .nslot.cur { border-color: var(--blue); }
 .slots input { position: absolute; inset: 0; width: 100%; opacity: 0; font-size: 16px; }
 .clear { border: 2px solid var(--line); box-shadow: none; }
-/* v0.3.1: a new #1 is an event: gold edge + light gold tint on the score and rank cards, a gold star by the "#1" */
+/* v0.3.1: a new #1 is an event: gold edge + light gold tint on the #1 rank card (v0.3.3: only that card), a gold star by the "#1" */
 :root { --gold-hi: #ffc928; }
 .card.gold { background: #fff8de; box-shadow: 0 0 0 2.5px var(--gold-hi), 0 6px 16px rgba(255, 201, 40, .28); }
 .rank .pos .star { display: inline-block; margin-left: 2px; font-size: 20px; vertical-align: 8px; color: var(--gold-hi); text-shadow: 0 1px 0 #e0a800; }
@@ -209,8 +209,15 @@ button { font: inherit; color: inherit; border: 0; background: none; padding: 0;
 .bnode.whole.counting { background: var(--card); color: #5287ea; box-shadow: 0 0 0 3px var(--lblue), var(--shadow); font-size: 38px; }
 .bnode.whole.counting.c1 { color: var(--blue); box-shadow: 0 0 0 3px var(--blue), var(--shadow); }
 .bnode.whole { transition: background-color .18s, color .18s, box-shadow .18s; }
-.fx .plabel { position: absolute; transform: translateX(-50%); font: 700 20px/1 var(--f-display); font-variant-numeric: tabular-nums; }
-.fx .plabel.p0 { color: #5287ea; } .fx .plabel.p1 { color: var(--blue); } .bnode.p0 { background: var(--lblue); } .bnode.p1 { background: var(--blue); }
+.bnode.p0 { background: var(--lblue); } .bnode.p1 { background: var(--blue); }
+/* v0.3.3: a frame completes -> the counter flashes a green ring (the make-ten one holds it with its caption) */
+.bnode.whole.counting.flash, .bnode.whole.counting.c1.flash { box-shadow: 0 0 0 4px var(--green), 0 0 0 9px rgba(34, 197, 94, .18), var(--shadow); }
+/* v0.3.3: part key above the frames: a light-blue dot + the smaller part (#5287ea), a dark-blue dot + the larger part */
+.fx .pkey { position: absolute; left: 0; right: 0; display: flex; justify-content: center; gap: 22px; font: 700 20px/22px var(--f-display); font-variant-numeric: tabular-nums; pointer-events: none; }
+.fx .pkey .k { display: inline-flex; align-items: center; gap: 7px; }
+.fx .pkey .k i { width: 14px; height: 14px; border-radius: 50%; }
+.fx .pkey .p0 i { background: var(--lblue); } .fx .pkey .p0 b { color: #5287ea; }
+.fx .pkey .p1 i { background: var(--blue); } .fx .pkey .p1 b { color: var(--blue); }
 .bondlines { width: 100%; height: 100%; overflow: visible; }
 .bondlines line, .labbond line { stroke: var(--line); stroke-width: 4; stroke-linecap: round; }
 .fx .skiphint { top: auto; bottom: 0; left: 0; right: 0; text-align: center; font: 800 11px/1 var(--f-ui); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
