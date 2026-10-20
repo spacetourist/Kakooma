@@ -1,5 +1,5 @@
 // v0.3.3 count + make-ten stage: node scripts/count-v033.mjs [baseUrl]. Per level: lesson length + hook timings for 3+7, 7+12, 24+26,
-// +1-per-dot, continuous fill, the in-count make-ten flash/caption, part key, total() stagger, reduced motion, skip mid-count.
+// +1-per-dot, continuous fill, the in-count make-ten flash/caption, source badges (v0.3.3.1), total() stagger, reduced motion, skip mid-count.
 import { createServer } from 'http';
 import { readFileSync, existsSync, statSync, mkdirSync, writeFileSync } from 'fs';
 import { join, extname } from 'path';
@@ -21,9 +21,10 @@ const browser = await chromium.launch({ executablePath: '/usr/bin/google-chrome'
 const errs = [], fails = [], log = [], out = {};
 const check = (c, msg) => { (c ? log : fails).push((c ? 'ok   ' : 'FAIL ') + msg); };
 let page;
+let VP = { width: 390, height: 844 };
 async function open(level, n, reduced = false) {
   if (page) await page.close();
-  page = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
+  page = await browser.newPage({ viewport: VP, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
   page.on('pageerror', e => errs.push(e.message)); page.on('console', m => { if (m.type() === 'error') errs.push(m.text()); });
   await page.goto(BASE + `?round=600&teach=full&level=${level}` + (reduced ? '&reduced' : '')); await page.waitForFunction(() => document.fonts.status === 'loaded'); await page.waitForTimeout(300);
   await tapEl(`#picker [data-n="${n}"]`); await page.waitForTimeout(300);
@@ -36,7 +37,7 @@ const SUMS = { '3+7': [3, 7, [3, 7, 10, 1, 9]], '7+12': [7, 12, [7, 12, 19, 4, 2
 async function lesson(P) {
   await kk(p => { window.__kkNext = [p, p]; }, P);
   await tapEl('#mStart'); await page.waitForFunction(() => window.__kk.phase === 'play'); await wait(300);
-  await kk(() => { window.__sfxLog = []; window.__kkCount = []; window.__stages = []; window.__green = null; new MutationObserver(() => { const e = document.querySelector('#fx .bnode.whole'); if (e && window.__green == null && !e.classList.contains('counting')) window.__green = performance.now(); }).observe(document.getElementById('fx'), { subtree: true, attributes: true, attributeFilter: ['class'] }); let last = ''; const poll = () => { const g = window.__kk.teachStage; if (g !== last) { window.__stages.push([g, performance.now()]); last = g; } if (window.__kk.phase !== 'menu') requestAnimationFrame(poll); }; requestAnimationFrame(poll); });
+  await kk(() => { window.__sfxLog = []; window.__kkCount = []; window.__stages = []; window.__green = null; window.__empty = []; new MutationObserver(() => { const e = document.querySelector('#fx .bnode.whole'); if (e && window.__green == null && !e.classList.contains('counting')) window.__green = performance.now(); window.__empty = window.__empty || []; document.querySelectorAll('#fx .srcb.drained').forEach((b, i) => { const k = b.classList.contains('p0') ? 0 : 1; if (window.__empty[k] == null) window.__empty[k] = performance.now(); }); }).observe(document.getElementById('fx'), { subtree: true, attributes: true, attributeFilter: ['class'] }); let last = ''; const poll = () => { const g = window.__kk.teachStage; if (g !== last) { window.__stages.push([g, performance.now()]); last = g; } if (window.__kk.phase !== 'menu') requestAnimationFrame(poll); }; requestAnimationFrame(poll); });
   const i = await kk(() => window.__kk.puzzle.nums.indexOf(window.__kk.puzzle.answer));
   const bb = await page.locator(`.tile[data-i="${i}"]`).boundingBox();
   const tap = await kk(() => performance.now());
@@ -44,15 +45,27 @@ async function lesson(P) {
   return tap;
 }
 const LV = ONLY ? [ONLY] : ['easy', 'medium', 'hard'];
-for (const lv of LV) for (const [name, [a, b, nums]] of Object.entries(SUMS)) {
-  if (lv === 'easy' && a + b > 10) continue;
-  if (lv === 'medium' && a + b > 20) continue;
+async function runOne(lv, name, a, b, nums) {
+  if (lv === 'easy' && a + b > 10) return;
+  if (lv === 'medium' && a + b > 20) return;
   const c = a + b;
   await open(lv, 5);
   const tap = await lesson({ nums, a, b, answer: c });
   const cntAt = n => page.waitForFunction(n => (window.__kkCount || []).length >= n, n, { timeout: 15000 });
   const mid = Math.max(2, Math.round(c * 0.6));
-  const midShot = async () => { await cntAt(mid); await page.screenshot({ path: `${SHOTS}${TAG}-${lv}-${a}-${b}-mid.png` }); };
+  const midShot = async () => {
+    await cntAt(mid); await page.screenshot({ path: `${SHOTS}${TAG}-sources-${lv}-${a}-${b}${VP.width === 390 ? '' : '-' + VP.width}.png` });
+    const m = await kk(() => { const box = (l, t, w, h) => ({ l, r: l + w, t, b: t + h, cx: l + w / 2, cy: t + h / 2, w }); const R = e => box(e.offsetLeft, e.offsetTop, e.offsetWidth, e.offsetHeight); // layout boxes (no pop/pulse transforms)
+      const sb = [...document.querySelectorAll('#fx .srcb')], ans = document.querySelector('#fx .bnode.whole'), cap = document.querySelector('#fx .mk10'), hint = document.querySelector('#fx .skiphint'), board = document.getElementById('board');
+      return { n: sb.length, sb: sb.map(R), fill: sb.map(e => [getComputedStyle(e.querySelector('.fill')).backgroundColor, getComputedStyle(e.querySelector('.fill')).clipPath, getComputedStyle(e.querySelector('.fill b')).color, +getComputedStyle(e).opacity]),
+        ans: (([x, y, d]) => box(x - d / 2, y - d / 2, d, d))(ans.dataset.rest.split(',').map(Number)), frames: [...document.querySelectorAll('#fx .tf')].map(R), cap: +getComputedStyle(cap).opacity > 0.05 ? R(cap) : null, hint: R(hint), board: box(0, 0, document.getElementById('fx').clientWidth, document.getElementById('fx').clientHeight), key: document.querySelectorAll('#fx .pkey').length }; });
+    const ov = (p, q) => p.l < q.r - 0.5 && q.l < p.r - 0.5 && p.t < q.b - 0.5 && q.t < p.b - 0.5;
+    const [L, Rr] = m.sb, A = m.ans, others = [...m.frames, ...(m.cap ? [m.cap] : []), m.hint];
+    const row = m.n === 2 && Math.abs(L.cy - A.cy) < 3 && Math.abs(Rr.cy - A.cy) < 3 && L.r <= A.l && A.r <= Rr.l && Math.abs((A.l - L.r) - (Rr.l - A.r)) < 2;
+    const noOv = [L, Rr, A].every(x => others.every(o => !ov(x, o))) && !ov(L, A) && !ov(Rr, A) && [L, Rr, A, ...m.frames].every(x => x.l >= m.board.l - 1 && x.r <= m.board.r + 1);
+    check(row && noOv && m.key === 0, `${lv} ${name} @${VP.width}px: one row [${Math.round(L.w)}] ${Math.round(A.l - L.r)} [${Math.round(A.w)}] ${Math.round(Rr.l - A.r)} [${Math.round(Rr.w)}] under the frames, nothing overlaps, no colour key`);
+    check(m.fill[0][0] === 'rgb(156, 192, 255)' && m.fill[1][0] === 'rgb(58, 123, 255)' && m.fill.every(f => f[2] === 'rgb(255, 255, 255)' && f[3] > 0.95) && m.fill.some(f => /inset\([1-9]/.test(f[1])), `${lv} ${name}: sources #9cc0ff / #3a7bff with white numbers, draining mid-count ${JSON.stringify(m.fill.map(f => f[1]))}`);
+  };
   const tenN = Math.ceil(a / 10) * 10 <= c && a % 10 ? Math.ceil(a / 10) * 10 : 10;
   if (c < 10 || mid <= tenN) await midShot();
   if (c >= 10) { // the make-ten / first ten
@@ -66,14 +79,13 @@ for (const lv of LV) for (const [name, [a, b, nums]] of Object.entries(SUMS)) {
     if (mid > ten) await midShot();
   }
   await page.waitForFunction(() => window.__kk.teachStage === 'counted', null, { timeout: 15000 }); await wait(120);
-  const g = await kk(() => ({ frames: [...document.querySelectorAll('#fx .tf')].map(f => f.classList.contains('ten')), key: [...document.querySelectorAll('#fx .pkey .k')].map(e => [e.textContent, getComputedStyle(e.querySelector('b')).color, getComputedStyle(e.querySelector('i')).backgroundColor, +getComputedStyle(e).opacity]), keyTop: document.querySelector('#fx .pkey').getBoundingClientRect().bottom, frameTop: Math.min(...[...document.querySelectorAll('#fx .tf')].map(f => f.getBoundingClientRect().top)), plabels: document.querySelectorAll('#fx .plabel').length }));
+  const g = await kk(() => ({ frames: [...document.querySelectorAll('#fx .tf')].map(f => f.classList.contains('ten')), src: [...document.querySelectorAll('#fx .srcb')].map(e => [e.querySelector('b').textContent, e.classList.contains('drained'), getComputedStyle(e).color, Math.round(e.getBoundingClientRect().width), getComputedStyle(e).boxShadow]), sum: document.getElementById('sum').textContent.replace(/\s/g, '') }));
   check(g.frames.length === Math.ceil(c / 10) && g.frames.filter(Boolean).length === Math.floor(c / 10), `${lv} ${name}: continuous fill: ${g.frames.length} frame(s), ${g.frames.filter(Boolean).length} full and ringed`);
-  check(g.key.length === 2 && g.key[0][0] === String(a) && g.key[1][0] === String(b) && g.key[0][1] === 'rgb(82, 135, 234)' && g.key[1][1] === 'rgb(58, 123, 255)' && g.key.every(k => k[3] > 0.95) && g.keyTop <= g.frameTop && g.plabels === 0, `${lv} ${name}: key above the frames ${JSON.stringify(g.key)} (key bottom ${Math.round(g.keyTop)} <= frames top ${Math.round(g.frameTop)}), no labels under the frames`);
-  if (lv === 'easy' && name === '3+7') await page.screenshot({ path: `${SHOTS}${TAG}-easy-3-7-key.png` });
+  check(g.src.length === 2 && g.src[0][0] === String(a) && g.src[1][0] === String(b) && g.src.every(x => x[1] && /inset/.test(x[4])) && g.src[0][2] === 'rgb(82, 135, 234)' && g.src[1][2] === 'rgb(58, 123, 255)' && g.sum === `${a}+${b}=${c}`, `${lv} ${name}: both sources emptied into coloured outlines ${JSON.stringify(g.src.map(x => x.slice(0, 4)))}, strip "${g.sum}"`);
   if (lv === 'hard' && name === '24+26') await page.screenshot({ path: `${SHOTS}${TAG}-hard-24-26-five-frames.png` });
   await page.waitForFunction(() => window.__kk.phase === 'play', null, { timeout: 20000 });
   const end = await kk(() => performance.now());
-  const r = await kk(() => ({ green: window.__green, cnt: window.__kkCount, sfx: window.__sfxLog.map(([n, a, t]) => [n + (a.length ? `(${a.join()})` : ''), t]), stages: window.__stages }));
+  const r = await kk(() => ({ empty: window.__empty, green: window.__green, cnt: window.__kkCount, sfx: window.__sfxLog.map(([n, a, t]) => [n + (a.length ? `(${a.join()})` : ''), t]), stages: window.__stages }));
   const rel = t => Math.round(t - tap);
   const seq = r.cnt.map(x => x[0]);
   const frames = r.cnt.map(x => x[1]); const gaps = frames.slice(1).map((t, i) => t - frames[i]);
@@ -84,6 +96,7 @@ for (const lv of LV) for (const [name, [a, b, nums]] of Object.entries(SUMS)) {
     const first = n => r.sfx.find(x => x[0] === n)?.[1];
     const d0 = first('partPop(0)') - first(`count(${a - 1})`), d1 = first('partPop(1)') - first(`count(${c - 1})`), d2 = first('total') - first('partPop(1)');
     check(Math.abs(d0 - 150) <= 20 && Math.abs(d1 - 150) <= 20 && Math.abs(d2 - 150) <= 20, `${lv} ${name}: partPop(0) ${Math.round(d0)} ms after the last light dot, partPop(1) ${Math.round(d1)} ms after the last dark dot, total ${Math.round(d2)} ms after that`);
+    check(r.empty.length === 2 && Math.abs(r.empty[0] - first('partPop(0)')) < 1 && Math.abs(r.empty[1] - first('partPop(1)')) < 1, `${lv} ${name}: each source pops empty in the same frame as its partPop`);
     check(Math.abs(r.green - first('total')) < 1, `${lv} ${name}: the tile turns green in the same frame as total()`);
     const names = r.sfx.map(x => x[0]);
     check(!names.includes('makeTen') && !names.includes('hop') && names.filter(n => n === 'total').length === 1 && names.filter(n => n === 'bond').length === 1 && first('bond') > first('total'), `${lv} ${name}: no makeTen/hop in the lesson; total() once; bond() once, in the bond stage`);
@@ -98,6 +111,9 @@ for (const lv of LV) for (const [name, [a, b, nums]] of Object.entries(SUMS)) {
   if (lv === 'hard') check(med <= 84 && countMs <= 3100 + 700, `hard ${name}: median ${Math.round(med)} ms per dot, count stage ${countMs} ms`);
   await tapEl('#gQuit'); await wait(200);
 }
+for (const lv of LV) for (const [name, [a, b, nums]] of Object.entries(SUMS)) await runOne(lv, name, a, b, nums);
+// v0.3.3.1: Hard 24 + 26 (five frames) at 360 px: the source row still fits and nothing overlaps
+if (!ONLY || ONLY === 'hard') { VP = { width: 360, height: 780 }; const keep = { ...out }; await runOne('hard', '24+26', ...SUMS['24+26']); Object.assign(out, keep); VP = { width: 390, height: 844 }; }
 // reduced motion: same pace, no flying (dots appear in place)
 if (!ONLY) {
   await open('easy', 4, true);

@@ -41,7 +41,7 @@ export function teach(ctx: TeachCtx, a: number, b: number): TeachRun {
   const gap = 3, pad = 5, between = 10;
   const cs = Math.max(14, Math.min(22, Math.floor(((w - 12 - between * (perRow - 1)) / perRow - 2 * pad - 4 * gap) / 5)));
   const d = { w: 5 * cs + 4 * gap + 2 * pad, h: 2 * cs + gap + 2 * pad, cs, gap, pad };
-  const fh = d.h, rowGap = 14, top0 = nRows === 1 ? h * 0.24 : h * 0.18;
+  const fh = d.h, rowGap = 14, top0 = nRows === 1 ? h * 0.24 : fh / 2 + 14; // v0.3.3.1: two rows sit near the top so the source row keeps its size
   const rowY = Array.from({ length: nRows }, (_, r) => top0 + r * (fh + rowGap));
   const pos: { x: number; y: number }[] = [];
   for (let r = 0; r < nRows; r++) {
@@ -53,13 +53,16 @@ export function teach(ctx: TeachCtx, a: number, b: number): TeachRun {
     const p = pos[s.box], col = s.cell % 5, row = Math.floor(s.cell / 5);
     return { x: p.x + pad + col * (cs + gap) + cs / 2, y: p.y + pad + row * (cs + gap) + cs / 2, s: 1 };
   };
-  // v0.3.3: the make-ten caption sits between the frames and the counter; the part key sits above the frames
+  // v0.3.3: the make-ten caption sits between the frames and the counter. v0.3.3.1 (GD): one row under the frames:
+  // [smaller source 80] 12 [counter 120] 12 [larger source 80] (304 px, fits 360 px); the dots launch from the sources
   const lastBottom = rowY[nRows - 1] + fh / 2, CAPH = 46;
   const capY = lastBottom + 10;
   const K = Math.max(1.05, Math.min(120 / 72, (h - lastBottom - CAPH - 24) / 72)); // counter ~120 px, clear of the "Tap to skip" hint
   const C = { x: w / 2, y: lastBottom + CAPH + 36 * K };
   const A = { x: w / 2, y: h - 46 }; // the answer node's home box; it is shown at C (scale K) and rises from there to the bond's whole
-  const keyY = rowY[0] - fh / 2 - 30;
+  const SB = Math.round(Math.min(72 * K, Math.max(72, 80 * (72 * K) / 120))), // 80 next to a 120 counter; never under 72 (or taller than the counter)
+    SG = 12, sx = 36 * K + SG + SB / 2; // source badge size; centre offset from C
+  const src = [{ x: C.x - sx, y: C.y }, { x: C.x + sx, y: C.y }];
 
   // ---------- elements ----------
   const plate = add(document.createElement('div')); plate.className = 'plate'; plate.style.width = w + 'px'; plate.style.height = h + 'px'; plate.style.opacity = '0';
@@ -77,11 +80,18 @@ export function teach(ctx: TeachCtx, a: number, b: number): TeachRun {
   });
   const bridgeTen = plan.tens.find(t => t.caption);
   const cap = add(document.createElement('div')); cap.className = 'tcap mk10'; cap.textContent = bridgeTen?.caption ?? (plan.c < 10 ? `${plan.S} + ${plan.L} = ${plan.c}` : ''); cap.style.top = capY + 'px'; cap.style.opacity = '0'; // under ten: the sum, shown on the green total
-  // part key above the frames: a light-blue dot + the smaller part, a dark-blue dot + the larger part
-  const key = add(document.createElement('div')); key.className = 'pkey'; key.style.top = keyY + 'px';
-  const keyItems = [plan.S, plan.L].map((v, i) => { const e = document.createElement('span'); e.className = `k p${i}`; e.innerHTML = `<i></i><b>${v}</b>`; e.style.opacity = '0'; key.appendChild(e); return e; });
+  // source badges (v0.3.3.1, GD): filled tiles (#9cc0ff / #3a7bff, white number) that drain top to bottom like a glass as
+  // their dots leave; the number stays readable (a coloured copy shows through where the fill has gone). Empty at the
+  // group's end (partPop): shrink to 0.92 and become a coloured outline.
+  const srcs = [plan.S, plan.L].map((v, i) => {
+    const e = add(document.createElement('div')); e.className = `srcb p${i}`;
+    e.style.width = e.style.height = SB + 'px'; e.style.left = src[i].x - SB / 2 + 'px'; e.style.top = src[i].y - SB / 2 + 'px';
+    e.style.fontSize = Math.round(SB * 0.5) + 'px'; e.innerHTML = `<b>${v}</b><div class="fill"><b>${v}</b></div>`; e.style.opacity = '0';
+    return e;
+  });
+  const fills = srcs.map(e => e.querySelector('.fill') as HTMLElement);
   const ans = add(document.createElement('div')); ans.className = 'bnode whole counting'; ans.textContent = '0';
-  ans.style.width = ans.style.height = '72px'; ans.style.left = A.x - 36 + 'px'; ans.style.top = A.y - 36 + 'px'; ans.style.opacity = '0'; ans.style.zIndex = '2';
+  ans.style.width = ans.style.height = '72px'; ans.style.left = A.x - 36 + 'px'; ans.style.top = A.y - 36 + 'px'; ans.style.opacity = '0'; ans.style.zIndex = '2'; ans.dataset.rest = `${C.x.toFixed(1)},${C.y.toFixed(1)},${(72 * K).toFixed(1)}`; // the counter's resting box (tests)
   const skipHint = add(document.createElement('div')); skipHint.className = 'skiphint'; skipHint.textContent = 'Tap to skip';
   anim(skipHint, [{ opacity: 0 }, { opacity: 1 }], { duration: 200, delay: 400, fill: 'both' });
 
@@ -89,12 +99,13 @@ export function teach(ctx: TeachCtx, a: number, b: number): TeachRun {
   const later = (ms: number, f: () => void) => setTimeout(() => { if (!over) f(); }, ms);
 
   (async () => {
-    const from = [ctx.centre(ctx.iS), ctx.centre(ctx.iL)];
+    const from = src; // v0.3.3.1: every dot leaves its own source badge
     dim(ctx.tiles.map((_, i) => i).filter(i => i < ctx.n && i !== ctx.iS && i !== ctx.iL && i !== ctx.iC));
     // a clean plate fades over the board once the parts have burst, so frames + captions read clearly
     anim(plate, [{ opacity: 0 }, { opacity: 1 }], { duration: 240, delay: reduced ? 0 : 140, fill: 'both' });
     setTimeout(() => { if (!over) dim('all'); }, reduced ? 0 : 260);
     frames.forEach((f, i) => fadeIn(f, 180, reduced ? 0 : 120 + i * 30, 0));
+    srcs.forEach((e, i) => anim(e, reduced ? [{ opacity: 0 }, { opacity: 1 }] : [{ opacity: 0, scale: '.6' }, { opacity: 1, scale: '1' }], { duration: 220, delay: reduced ? 0 : 140 + i * 40, fill: 'both', easing: 'cubic-bezier(.34,1.56,.64,1)' }));
     const dC = `${C.x - A.x}px ${C.y - A.y}px`;
     anim(ans, reduced ? [{ opacity: 0, translate: dC, scale: String(K) }, { opacity: 1, translate: dC, scale: String(K) }]
       : [{ opacity: 0, translate: dC, scale: String(K * 0.5) }, { opacity: 1, translate: dC, scale: String(K) }], { duration: 240, delay: reduced ? 0 : 220, fill: 'both', easing: 'cubic-bezier(.34,1.56,.64,1)' });
@@ -103,7 +114,7 @@ export function teach(ctx: TeachCtx, a: number, b: number): TeachRun {
      * the larger part's dots (dark blue) carry on into the empty cells of the same frame, then the next frames. The
      * counter (the answer tile, big, under the frames) goes up by exactly 1 per dot with a 1.12x pop. Each time a frame
      * completes it rings green and the counter flashes a green ring; the make-ten frame (where the colours meet) also
-     * shows "7 + 3 = 10" and the count holds ~0.6 s on it. Each part's key entry appears when it is done (partPop);
+     * shows "7 + 3 = 10" and the count holds ~0.6 s on it. Each source badge drains as its dots leave and pops into an outline when its group is done (partPop);
      * the final count turns the tile green (total). Reduced motion: no flight (dots appear in place), no pops.
      */
     ctx.onStage?.('fly');
@@ -124,18 +135,30 @@ export function teach(ctx: TeachCtx, a: number, b: number): TeachRun {
       frame.classList.add('ten'); ans.classList.add('flash'); later(ms, () => ans.classList.remove('flash'));
       if (!reduced) anim(frame, [{ scale: '1' }, { scale: '1.06', offset: 0.4 }, { scale: '1' }], { duration: 260 });
     };
-    // group ends, staggered so the sounds never stack on the last dot (Audio Engineer): each part's key + partPop
+    // group ends, staggered so the sounds never stack on the last dot (Audio Engineer): each part's badge pop + partPop
     // 150 ms after its last dot's actual frame; the tile turns green + total() 150 ms after the second partPop (+300 ms after the last dot)
     const POP_AFTER = 150, GREEN_AFTER = 150, CAP_MS = 750;
     const evAt = [T0 + tm.land[plan.S - 1] + POP_AFTER, T0 + tm.land[plan.c - 1] + POP_AFTER, T0 + tm.land[plan.c - 1] + POP_AFTER + GREEN_AFTER];
     let ev = 0;
     // the counter: one rAF loop, at most +1 per frame, so every dot visibly adds exactly one (count(i) on that frame)
-    const t0 = performance.now(); let shown = 0;
+    const t0 = performance.now(); let shown = 0, launched = 0;
+    const left = [-1, -1];
+    /** the glass empties from the top: clip the fill layer down to the share of dots still in the badge */
+    const drain = (i: 0 | 1, gone: number, n: number) => {
+      if (left[i] === n - gone) return; left[i] = n - gone;
+      fills[i].style.clipPath = `inset(${(100 * gone / n).toFixed(2)}% 0 0 0)`;
+    };
+    const emptied = (i: number) => {
+      srcs[i].classList.add('drained');
+      anim(srcs[i], reduced ? [{ scale: '.92' }, { scale: '.92' }] : [{ scale: '1' }, { scale: '1.08', offset: 0.35 }, { scale: '.92' }], { duration: reduced ? 1 : 260, easing: 'ease-out', fill: 'forwards', composite: 'replace' });
+    };
     (window as any).__kkCount = [];
     await new Promise<void>(res => {
       const step = () => {
         if (over) { res(); return; }
         const now = performance.now() - t0;
+        while (launched < plan.c && now >= T0 + tm.land[launched] - tm.fly) launched++;
+        drain(0, Math.min(launched, plan.S), plan.S); drain(1, Math.max(0, launched - plan.S), plan.L);
         if (shown < plan.c && now >= T0 + tm.land[shown]) {
           const k = shown++, part = k < plan.S ? 0 : 1;
           ans.textContent = String(shown);
@@ -156,9 +179,9 @@ export function teach(ctx: TeachCtx, a: number, b: number): TeachRun {
           if (shown === plan.S) evAt[0] = Math.max(evAt[0], now + POP_AFTER);
           if (shown === plan.c) { evAt[1] = Math.max(evAt[1], now + POP_AFTER); evAt[2] = Math.max(evAt[2], evAt[1] + GREEN_AFTER); }
         }
-        // group events on their own frames (key + partPop together; green + total together)
+        // group events on their own frames (badge pop + partPop together; green + total together)
         if (ev < 3 && now >= evAt[ev] && (ev === 0 ? shown >= plan.S : shown >= plan.c)) {
-          if (ev < 2) { fadeIn(keyItems[ev], 200, 0, 4); sfx.partPop(ev); if (ev === 1) evAt[2] = Math.max(evAt[2], now + GREEN_AFTER); }
+          if (ev < 2) { emptied(ev); sfx.partPop(ev); if (ev === 1) evAt[2] = Math.max(evAt[2], now + GREEN_AFTER); }
           else {
             ans.classList.remove('counting', 'c1', 'flash'); sfx.total(); ctx.onStage?.('counted');
             if (!bridgeTen && plan.c < 10) fadeIn(cap, 200, 0, 4);
@@ -179,7 +202,7 @@ export function teach(ctx: TeachCtx, a: number, b: number): TeachRun {
     ctx.onStage?.('absorb');
     const W = { x: w / 2, y: h * 0.27 }, P = [{ x: w / 2 - 88, y: h * 0.63 }, { x: w / 2 + 88, y: h * 0.63 }];
     const FADE = 200, RISE = reduced ? 1 : 300, B = FADE + 20; // B: the answer starts rising (just after the fade)
-    [...frames, cap, key, ...dots].forEach(e => anim(e, [{ opacity: getComputedStyle(e).opacity }, { opacity: 0 }], { duration: FADE, fill: 'both', easing: 'ease-in' }));
+    [...frames, cap, ...srcs, ...dots].forEach(e => anim(e, [{ opacity: getComputedStyle(e).opacity }, { opacity: 0 }], { duration: FADE, fill: 'both', easing: 'ease-in' }));
     // v0.3.3: the green counter rises straight from where it counted (no glide back under a make-ten step)
     anim(ans, [{ translate: dC, scale: String(K) }, { translate: `${W.x - A.x}px ${W.y - A.y}px`, scale: String(88 / 72) }], { duration: RISE, delay: B, easing: 'cubic-bezier(.3,.8,.4,1)', fill: 'both', composite: 'replace' });
     sfx.bond(inMs(B)); // the answer rises
