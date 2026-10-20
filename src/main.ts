@@ -4,6 +4,7 @@ import { teach, type TeachRun } from './teach';
 import { haptic, ripple, reducedMotion } from './fx';
 import { sfx } from './sfx';
 import { initLab } from './lab';
+import { avgSolve, secLabel } from './stats';
 
 const $ = (id: string) => document.getElementById(id)!;
 const NS = [4, 5, 6, 7] as const;
@@ -299,7 +300,7 @@ function onTap(i: number, now: number) {
     sfx.correct();
     const milestone = st.streak === 5 || st.streak === 10 || st.streak === 20;
     const newBest = st.prevBest > 0 && st.score === st.prevBest + 1;
-    if (newBest) sfx.newBest();
+    if (newBest) cueNewBest();
     if (wantsFull(milestone || newBest || hadMistake)) runTeach(solved, i, nextPuzzle);
     else { // quick: squish -> green bounce + the sum strip
       if (!reducedMotion()) tiles[i].animate([{ transform: 'scale(.92)' }, { transform: 'scale(1.12)', offset: 0.45 }, { transform: 'scale(1)' }], { duration: 320, easing: 'ease-out' });
@@ -341,30 +342,39 @@ const nz = (x: number | null) => (x == null ? Infinity : x);
 const cmp = (a: Entry, b: Entry) => b.score - a.score || b.streak - a.streak || nz(a.avg) - nz(b.avg) || a.at - b.at;
 const boardFor = (lv: Level, n: number) => loadAll().filter(e => e.lv === lv && e.n === n).sort(cmp).slice(0, 10);
 function qualifies(e: Entry) { if (e.score <= 0) return false; const b = boardFor(e.lv, e.n); return b.length < 10 || cmp(e, b[b.length - 1]) < 0; }
-const sec = (ms: number | null) => (ms == null ? '—' : `${(ms / 1000).toFixed(1)}s`);
+const sec = secLabel;
 
 // ---------- results ----------
+/** newBest sound: in-round when the old best is beaten, and at the gold #1 reveal on the results screen.
+ * Never twice within 1.5 s (the in-round cue is always at least one full lesson, ~5 s, before the round can end). */
+let lastNewBest = -Infinity;
+function cueNewBest() { const now = performance.now(); if (now - lastNewBest < 1500) return; lastNewBest = now; sfx.newBest(); }
+
 let pending: Entry | null = null, lastSaved = 0, fromGame = false;
 function endRound() {
   if (st.phase === 'done') return;
   cancelTimers(); st.run++; pause(performance.now()); st.left = 0; drawTimer(0);
   st.phase = 'done';
-  const avg = st.solve.length ? Math.round(st.solve.reduce((s, x) => s + x, 0) / st.solve.length) : null;
+  const avg = avgSolve(st.solve);
   const e: Entry = { name: '', lv: st.lv, n: st.n, score: st.score, streak: st.best, avg, miss: st.miss, at: Date.now() };
   $('rSub').innerHTML = `<span class="lvtag lv-${st.lv}">${lvName(st.lv)}</span> ${SHAPE[st.n]} · ${st.n} numbers · ${ROUND_MS / 1000}s round`;
   $('rScore').textContent = String(e.score);
   $('rStreak').textContent = `x${e.streak}`; $('rAvg').textContent = sec(avg); $('rMiss').textContent = String(e.miss);
   const q = qualifies(e);
   const pos = [...boardFor(e.lv, e.n), e].sort(cmp).indexOf(e) + 1;
+  const top = q && pos === 1; // v0.3.1: a new #1 on this level + shape is an event (gold cards, Blaze in shades)
   $('rRank').innerHTML = q
-    ? `<span class="pos">#${pos}</span><span>${pos === 1 ? 'New top score' : 'Leaderboard place'} on ${LEVEL_NAME[e.lv]} ${SHAPE[e.n]}</span>`
+    ? `<span class="pos">#${pos}${top ? '<i class="star" aria-label="new top score">★</i>' : ''}</span><span>${pos === 1 ? 'New top score' : 'Leaderboard place'} on ${LEVEL_NAME[e.lv]} ${SHAPE[e.n]}</span>`
     : `<span class="pos na">—</span><span>${e.score ? `Not in the ${LEVEL_NAME[e.lv]} ${SHAPE[e.n]} top 10 this time` : 'Solve one to get on the board'}</span>`;
   pending = q ? e : null;
   $('nameCard').classList.toggle('hidden', !q);
   nameIn.value = ''; renderSlots();
   fromGame = true;
+  $('rRank').classList.toggle('gold', top); $('rScoreCard').classList.toggle('gold', top);
+  $('rBlaze').classList.toggle('cool', top);
   show('results');
   sfx.timeUp();
+  if (top) cueNewBest(); // same tick (so the same frame) as the gold cards appear
 }
 const nameIn = $('nameIn') as HTMLInputElement, nameSave = $('nameSave') as HTMLButtonElement, nameClear = $('nameClear') as HTMLButtonElement;
 const nameSlots = [...document.querySelectorAll<HTMLElement>('.slots .nslot')];
@@ -411,8 +421,8 @@ function showBoards(n: number, lv: Level = boardLv) {
   $('bRetry').classList.toggle('hidden', !fromGame);
   show('boards');
 }
-press($('bTabs'), e => { const b = (e.target as HTMLElement).closest('button'); if (!b) return; const k = +b.dataset.n!; if (!shapeOk(boardLv, k)) { $('bHead').textContent = noShape(boardLv, k); return; } showBoards(k); });
-press($('bLevels'), e => { const b = (e.target as HTMLElement).closest('button'); if (b && isLevel(b.dataset.lv)) showBoards(boardN, b.dataset.lv); });
+press($('bTabs'), e => { const b = (e.target as HTMLElement).closest('button'); if (!b) return; const k = +b.dataset.n!; if (!shapeOk(boardLv, k)) { $('bHead').textContent = noShape(boardLv, k); sfx.wrong(); return; } showBoards(k); });
+press($('bLevels'), e => { const b = (e.target as HTMLElement).closest('button'); if (b && isLevel(b.dataset.lv)) { showBoards(boardN, b.dataset.lv); sfx.uiTap(); } });
 press($('bRetry'), () => startRound());
 press($('bMenu'), () => toMenu());
 
@@ -441,7 +451,7 @@ function setN(n: number, ms: number) { if (n === st.n) return; st.n = n; try { l
 press(picker, e => {
   const b = (e.target as HTMLElement).closest('button'); if (!b) return;
   const n = +b.dataset.n!;
-  if (!shapeOk(st.lv, n)) { flashNote(noShape(st.lv, n)); sfx.uiTap(); return; }
+  if (!shapeOk(st.lv, n)) { flashNote(noShape(st.lv, n)); sfx.wrong(); return; }
   if (n === st.n) return;
   note = ''; setN(n, SLIDE_MS); renderPicker(); warm();
   sfx.uiTap();
@@ -474,5 +484,6 @@ press($('gQuit'), quit);
   st.lv = isLevel(q) ? q : isLevel(saved) ? saved : (localStorage.getItem(LS.n) || localStorage.getItem(LS.boardV1)) ? 'hard' : 'easy';
 }
 boardN = st.n; boardLv = st.lv;
+if (reducedMotion()) document.documentElement.classList.add('reduced');
 toMenu();
 document.fonts?.ready.then(() => layout(shownN || st.n, 0));

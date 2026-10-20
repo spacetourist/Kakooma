@@ -99,7 +99,7 @@
   <section class="screen panel hidden" id="results">
     <h2 class="title">Time's up!</h2>
     <div class="sub" id="rSub"></div>
-    <div class="card scorecard"><div class="lbl">Score</div><div class="big" id="rScore">0</div></div>
+    <div class="card scorecard" id="rScoreCard"><div class="lbl">Score</div><div class="big" id="rScore">0</div></div>
     <div class="stats">
       <div class="card"><div class="lbl">Best streak</div><b id="rStreak">x0</b></div>
       <div class="card"><div class="lbl">Avg solve</div><b id="rAvg">—</b></div>
@@ -111,9 +111,18 @@
       <div class="namerow">
         <label class="slots"><span class="nslot"></span><span class="nslot"></span><span class="nslot"></span>
           <input id="nameIn" maxlength="3" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false" inputmode="text" enterkeyhint="done" aria-label="Initials"></label>
+      </div>
+      <div class="namebtns">
         <button type="button" class="btn ghost sm clear" id="nameClear" tabindex="-1" disabled>Clear</button>
         <button type="button" class="btn primary sm" id="nameSave" disabled>Save</button>
       </div>
+    </div>
+    <div class="rblaze" id="rBlaze" aria-hidden="true">
+      <div class="blaze-body">
+        <img src="%BASE_URL%assets/img/blaze.png" alt="" width="96" draggable="false">
+        <svg class="shades" viewBox="0 0 100 30"><path d="M4 6h40l-3 14c-1 5-5 8-10 8H17c-5 0-9-3-10-8z M56 6h40l-3 14c-1 5-5 8-10 8H69c-5 0-9-3-10-8z" fill="#1d2340"/><path d="M44 9c3-2 9-2 12 0" stroke="#1d2340" stroke-width="3" fill="none"/><path d="M12 10l10 0M64 10l10 0" stroke="#fff" stroke-width="2.5" stroke-linecap="round" opacity=".7"/></svg>
+      </div>
+      <i class="rshadow"></i>
     </div>
     <div class="foot pinned">
       <button type="button" class="btn primary" id="rRetry">Retry</button>

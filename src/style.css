@@ -31,6 +31,8 @@ button { font: inherit; color: inherit; border: 0; background: none; padding: 0;
 .timer.low { color: var(--coral); }
 .penalty { position: absolute; left: 100%; margin-left: 8px; font: 800 15px/1 var(--f-ui); font-style: normal; color: var(--coral); opacity: 0; white-space: nowrap; }
 #play[data-mode="menu"] .game-only, #play[data-mode="game"] .menu-only { display: none !important; }
+/* v0.3.1: showSum() rewrites the strip's className (dropping .game-only), so hide it by id too: it leaked onto the menu after a round */
+#play[data-mode="menu"] #sum { display: none !important; }
 
 /* Blaze: the only illustration */
 .blaze { position: relative; width: 104px; height: 120px; margin-top: 22px; margin-right: -6px; display: flex; flex-direction: column; align-items: center; }
@@ -140,12 +142,35 @@ button { font: inherit; color: inherit; border: 0; background: none; padding: 0;
 .rank .pos { font: 700 30px/1 var(--f-display); color: var(--blue); min-width: 54px; }
 .rank .pos.na { color: var(--muted); }
 .namecard { margin-top: 12px; }
-.namerow { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
-.slots { position: relative; display: flex; gap: 6px; flex: 1; }
+.namerow { display: flex; align-items: center; margin-top: 10px; }
+.slots { position: relative; display: flex; gap: 8px; flex: 1; justify-content: center; }
+/* v0.3.1: CLEAR + SAVE on their own row under the initials, two equal full-width buttons (never past the card edge) */
+.namebtns { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px; }
+.namebtns .btn { width: 100%; min-width: 0; height: 52px; padding: 0 8px; }
 .nslot { width: 44px; height: 52px; border-radius: 12px; background: var(--bg); border: 2px solid var(--line); display: grid; place-items: center; font: 700 28px/1 var(--f-display); }
 .nslot.cur { border-color: var(--blue); }
 .slots input { position: absolute; inset: 0; width: 100%; opacity: 0; font-size: 16px; }
-.clear { padding: 0 14px; }
+.clear { border: 2px solid var(--line); box-shadow: none; }
+/* v0.3.1: a new #1 is an event: gold edge + light gold tint on the score and rank cards, a gold star by the "#1" */
+:root { --gold-hi: #ffc928; }
+.card.gold { background: #fff8de; box-shadow: 0 0 0 2.5px var(--gold-hi), 0 6px 16px rgba(255, 201, 40, .28); }
+.rank .pos .star { display: inline-block; margin-left: 2px; font-size: 20px; vertical-align: 8px; color: var(--gold-hi); text-shadow: 0 1px 0 #e0a800; }
+.rank.gold .pos { color: var(--ink); }
+/* Blaze in the space above RETRY: happy bob normally; a gentle hop loop + sunglasses on a new #1; static with reduced motion */
+/* it takes the free space between the cards and the pinned buttons (up to 96 px tall), shrinking to fit; on a very short
+   screen it keeps 64 px and the panel scrolls, so it never sits under RETRY/MENU */
+#results { padding-bottom: calc(96px + env(safe-area-inset-bottom)); }
+.rblaze { position: relative; flex: 1 1 0; min-height: 64px; max-height: 136px; width: 100%; margin-top: auto; padding-top: 22px; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; pointer-events: none; }
+.rblaze .blaze-body { width: auto; height: auto; flex: 1 1 0; min-height: 0; max-height: 96px; aspect-ratio: 634 / 581; }
+.rblaze .blaze-body img { width: 100%; height: 100%; object-fit: contain; }
+.rblaze .rshadow { width: 58px; height: 8px; margin-top: 2px; border-radius: 50%; background: rgba(29, 35, 64, .1); }
+.rblaze.cool .shades { opacity: 1; transform: none; }
+.rblaze.cool .blaze-body { animation: rhop 1.3s cubic-bezier(.3, 0, .4, 1) infinite; }
+.rblaze.cool .rshadow { animation: rshadow 1.3s cubic-bezier(.3, 0, .4, 1) infinite; }
+@keyframes rhop { 0%, 100% { transform: translateY(0) scale(1.04, .96); } 12% { transform: translateY(0) scale(1); } 45% { transform: translateY(-16px) scale(.98, 1.03); } 78% { transform: translateY(0) scale(1); } }
+@keyframes rshadow { 0%, 12%, 78%, 100% { transform: scale(1); opacity: 1; } 45% { transform: scale(.7); opacity: .55; } }
+.reduced .rblaze .blaze-body, .reduced .rblaze .rshadow { animation: none !important; }
+@media (prefers-reduced-motion: reduce) { .rblaze .blaze-body, .rblaze .rshadow { animation: none !important; } }
 .foot.pinned { position: absolute; left: 0; right: 0; bottom: 0; flex-direction: row; padding: 14px var(--pad) max(18px, env(safe-area-inset-bottom)); background: linear-gradient(rgba(246, 247, 251, 0), var(--bg) 22%); }
 .foot.pinned .btn { flex: 1; }
 .panel .foot.pinned { position: fixed; max-width: 480px; margin: 0 auto; }
