@@ -3,7 +3,7 @@
  * centre, counters hop across to make a ten (captions), everything flows into the answer, then a part-whole bond
  * draws itself with confetti. Transforms + WAAPI only. teach() returns { done, skip }: skip() ends it at once.
  */
-import { planTeach, type Plan } from './plan';
+import { planTeach, countTiming, type Plan, type Pace } from './plan';
 import { confetti, reducedMotion } from './fx';
 import { sfx, stopAll } from './sfx';
 
@@ -14,6 +14,7 @@ export interface TeachCtx {
   n: number; iS: number; iL: number; iC: number; // tile indices: smaller part, larger part, answer
   onHop: () => void;             // Blaze hop
   onStage?: (s: string) => void; // progress hook (tests / analytics)
+  pace?: Pace;                   // v0.3.2: counting speed by level (default medium)
 }
 export interface TeachRun { done: Promise<void>; skip: () => void; plan: Plan }
 
@@ -40,7 +41,7 @@ export function teach(ctx: TeachCtx, a: number, b: number): TeachRun {
   const gap = 3, pad = 5, between = 10;
   const cs = Math.max(14, Math.min(22, Math.floor(((w - 12 - between * (perRow - 1)) / perRow - 2 * pad - 4 * gap) / 5)));
   const d = { w: 5 * cs + 4 * gap + 2 * pad, h: 2 * cs + gap + 2 * pad, cs, gap, pad };
-  const fh = d.h, rowGap = 14, top0 = nRows === 1 ? h * 0.24 : h * (nRows === 2 ? 0.17 : 0.11);
+  const fh = d.h, rowGap = nRows > 1 ? 30 : 14, /* v0.3.2: room for a part label between rows */ top0 = nRows === 1 ? h * 0.24 : h * (nRows === 2 ? 0.17 : 0.11);
   const rowY = Array.from({ length: nRows }, (_, r) => top0 + r * (fh + rowGap));
   const pos: { x: number; y: number }[] = [];
   for (let r = 0; r < nRows; r++) {
@@ -53,6 +54,10 @@ export function teach(ctx: TeachCtx, a: number, b: number): TeachRun {
     return { x: p.x + pad + col * (cs + gap) + cs / 2, y: p.y + pad + row * (cs + gap) + cs / 2, s: 1 };
   };
   const capY = rowY[nRows - 1] + fh / 2 + 18;
+  // v0.3.2 counter: the answer tile, scaled up (~120 px) just under the frames, below the part labels
+  const lastBottom = rowY[nRows - 1] + fh / 2, LBL = 26;
+  const K = Math.max(1.05, Math.min(120 / 72, (h - lastBottom - LBL - 24) / 72)); // clear of the "Tap to skip" hint
+  const C = { x: w / 2, y: lastBottom + LBL + 36 * K };
   const A = { x: w / 2, y: h - 46 }; // the answer node under the frames; it later rises to be the bond's whole
 
   // ---------- elements ----------
@@ -74,7 +79,7 @@ export function teach(ctx: TeachCtx, a: number, b: number): TeachRun {
     e.style.top = capY + i * 34 + 'px'; e.style.opacity = '0';
     return e;
   });
-  const ans = add(document.createElement('div')); ans.className = 'bnode whole'; ans.textContent = String(plan.c);
+  const ans = add(document.createElement('div')); ans.className = 'bnode whole counting'; ans.textContent = '0';
   ans.style.width = ans.style.height = '72px'; ans.style.left = A.x - 36 + 'px'; ans.style.top = A.y - 36 + 'px'; ans.style.opacity = '0'; ans.style.zIndex = '2';
   const skipHint = add(document.createElement('div')); skipHint.className = 'skiphint'; skipHint.textContent = 'Tap to skip';
   anim(skipHint, [{ opacity: 0 }, { opacity: 1 }], { duration: 200, delay: 400, fill: 'both' });
@@ -93,28 +98,80 @@ export function teach(ctx: TeachCtx, a: number, b: number): TeachRun {
     anim(plate, [{ opacity: 0 }, { opacity: 1 }], { duration: 240, delay: reduced ? 0 : 140, fill: 'both' });
     setTimeout(() => { if (!over) dim('all'); }, reduced ? 0 : 260);
     frames.forEach((f, i) => fadeIn(f, 180, reduced ? 0 : 120 + i * 30, 0));
-    anim(ans, reduced ? [{ opacity: 0 }, { opacity: 1 }] : [{ opacity: 0, scale: '.5' }, { opacity: 1, scale: '1' }], { duration: 240, delay: reduced ? 0 : 220, fill: 'both', easing: 'cubic-bezier(.34,1.56,.64,1)' });
-    // 1. burst + fly into the ten-frames
+    const dC = `${C.x - A.x}px ${C.y - A.y}px`;
+    anim(ans, reduced ? [{ opacity: 0, translate: dC, scale: String(K) }, { opacity: 1, translate: dC, scale: String(K) }]
+      : [{ opacity: 0, translate: dC, scale: String(K * 0.5) }, { opacity: 1, translate: dC, scale: String(K) }], { duration: 240, delay: reduced ? 0 : 220, fill: 'both', easing: 'cubic-bezier(.34,1.56,.64,1)' });
+    /*
+     * 1. count (v0.3.2, GD layout): the smaller part's dots (light blue) leave its tile one at a time and land in the
+     * ten-frame cells, left to right; the counter (the answer tile, big, under the frames) ticks up by exactly 1 per dot
+     * with a 1.12x pop. Then the larger part's dots (dark blue) continue the count. Each group gets its number as a label
+     * when done (partPop); the final count turns the tile green (bond). The dots stay where they land for make-ten.
+     * Reduced motion: the dots appear in their cells (no flight) and the counter steps at the same pace, no pop.
+     */
     ctx.onStage?.('fly');
-    const FLY = 480, stag = Math.min(10, 160 / plan.c);
-    let flyEnd = 0;
-    plan.counters.forEach((c, j) => {
-      const t = cell(c.slot), s = from[c.part];
-      if (reduced) { anim(dots[j], [{ transform: T(t.x, t.y), opacity: 0 }, { transform: T(t.x, t.y), opacity: 1 }], { duration: 200, fill: 'both' }); sfx.count(j, inMs(200)); return; }
-      const ang = Math.random() * Math.PI * 2, r = 20 + Math.random() * 18, bx = s.x + Math.cos(ang) * r, by = s.y + Math.sin(ang) * r;
-      const mx = (bx + t.x) / 2 + (c.part ? 30 : -30), my = (by + t.y) / 2 - 40;
-      const delay = j * stag;
+    const order = [0, 1].flatMap(part => plan.counters.map((c, j) => ({ c, j })).filter(x => x.c.part === part));
+    const tm = countTiming(ctx.pace ?? 'medium', plan.S, plan.L), T0 = 360; // frames are in by T0
+    order.forEach(({ c, j }, k) => {
+      const t = cell(c.slot), s = from[c.part], start = T0 + tm.land[k] - tm.fly;
+      if (reduced) { anim(dots[j], [{ transform: T(t.x, t.y), opacity: 0 }, { transform: T(t.x, t.y), opacity: 1 }], { duration: 120, delay: start + tm.fly - 120, fill: 'both' }); return; }
+      const mx = (s.x + t.x) / 2 + (c.part ? 24 : -24), my = Math.min(s.y, t.y) - 34;
       anim(dots[j], [
-        { transform: T(s.x, s.y, 0.3), opacity: 0 },
-        { transform: T(bx, by, 1.1), opacity: 1, offset: 0.22 },
+        { transform: T(s.x, s.y, 0.4), opacity: 0 },
+        { transform: T(s.x, s.y - 6, 1.1), opacity: 1, offset: 0.18 },
         { transform: T(mx, my, 1), opacity: 1, offset: 0.6 },
         { transform: T(t.x, t.y), opacity: 1 },
-      ], { duration: FLY, delay, easing: 'cubic-bezier(.3,.7,.4,1)', fill: 'both' });
-      sfx.count(j, inMs(delay + FLY)); // as this counter lands in its square (same tick as its fly animation)
-      flyEnd = Math.max(flyEnd, delay + FLY);
+      ], { duration: tm.fly, delay: start, easing: 'cubic-bezier(.4,0,.3,1)', fill: 'both' });
     });
-    if (!reduced) [ctx.iS, ctx.iL].forEach(i => anim(ctx.tiles[i], [{ transform: 'scale(1)' }, { transform: 'scale(1.15)', offset: 0.3 }, { transform: 'scale(1)' }], { duration: 300 }));
-    if (await wait(reduced ? 250 : flyEnd + 40)) return;
+    // part labels, centred under each group's cells
+    const groupLbl = (part: 0 | 1) => {
+      const cs2 = order.filter(o => o.c.part === part).map(o => cell(o.c.slot));
+      const boxes = new Set(order.filter(o => o.c.part === part).map(o => o.c.slot.box));
+      const e = add(document.createElement('div')); e.className = `plabel p${part}`; e.textContent = String(part ? plan.L : plan.S);
+      e.style.left = cs2.reduce((a, p) => a + p.x, 0) / cs2.length + 'px';
+      e.style.top = Math.max(...[...boxes].map(b => pos[b].y + fh)) + 3 + 'px'; e.style.opacity = '0';
+      return e;
+    };
+    const labels = [groupLbl(0), groupLbl(1)];
+    // group ends, staggered so the sounds never stack on the last dot (Audio Engineer): each part's label + partPop
+    // 150 ms after its last dot lands; the tile turns green + bond() 400 ms after the second label
+    const POP_AFTER = 150, GREEN_AFTER = 400;
+    const evAt = [T0 + tm.land[plan.S - 1] + POP_AFTER, T0 + tm.land[plan.c - 1] + POP_AFTER, T0 + tm.land[plan.c - 1] + POP_AFTER + GREEN_AFTER];
+    let ev = 0;
+    // the counter: one rAF loop, at most +1 per frame, so every dot visibly adds exactly one (count(i) on that frame)
+    const t0 = performance.now(); let shown = 0;
+    (window as any).__kkCount = [];
+    await new Promise<void>(res => {
+      const step = () => {
+        if (over) { res(); return; }
+        const now = performance.now() - t0;
+        if (shown < plan.c && now >= T0 + tm.land[shown]) {
+          const k = shown++, part = k < plan.S ? 0 : 1;
+          ans.textContent = String(shown);
+          ans.classList.toggle('c1', part === 1);
+          (window as any).__kkCount.push([shown, Math.round(now)]);
+          sfx.count(k); // zero-based running total (the dot that makes 10 is count(9)), on the frame this dot lands
+          if (!reduced) anim(ans, [{ transform: 'scale(1)' }, { transform: 'scale(1.12)', offset: 0.35 }, { transform: 'scale(1)' }], { duration: Math.min(220, tm.every + 40), easing: 'ease-out' });
+        }
+        // group events on their own frames (label + partPop together; green + bond together)
+        if (ev < 3 && now >= evAt[ev] && (ev === 0 ? shown >= plan.S : shown >= plan.c)) {
+          if (ev < 2) { fadeIn(labels[ev], 200, 0, 4); sfx.partPop(ev); }
+          else {
+            ans.classList.remove('counting', 'c1'); sfx.bond(); ctx.onStage?.('counted');
+            if (!reduced) anim(ans, [{ transform: 'scale(1)' }, { transform: 'scale(1.12)', offset: 0.35 }, { transform: 'scale(1)' }], { duration: 260, easing: 'ease-out' });
+          }
+          ev++;
+        }
+        if (ev >= 3) { res(); return; }
+        requestAnimationFrame(step);
+      };
+      requestAnimationFrame(step);
+    });
+    if (over) return;
+    // a beat on the green total, then the counter glides down to its usual place under the make-ten, labels fade
+    if (await wait(reduced ? 300 : tm.every > 200 ? 450 : 320)) return;
+    labels.forEach(l => anim(l, [{ opacity: 1 }, { opacity: 0 }], { duration: 200, fill: 'forwards' }));
+    anim(ans, [{ translate: dC, scale: String(K) }, { translate: '0 0', scale: '1' }], { duration: reduced ? 1 : 320, easing: 'cubic-bezier(.3,.8,.4,1)', fill: 'forwards' });
+    if (await wait(reduced ? 150 : 340)) return;
     // 2. make ten: k counters hop OUT of their frame into the open cells (they keep their own colour), then captions
     if (plan.k) {
       const hoppers = plan.counters.map((c, j) => ({ c, j })).filter(x => x.c.hop);

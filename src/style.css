@@ -204,7 +204,13 @@ button { font: inherit; color: inherit; border: 0; background: none; padding: 0;
 .fx .bondcap { font-size: 24px; }
 .bondcap .w { display: inline-block; } .bondcap .p0 { color: #5287ea; } .bondcap .p1 { color: var(--blue); } .bondcap .whole { color: var(--green); }
 .bnode { position: absolute; border-radius: 50%; display: grid; place-items: center; color: #fff; font: 700 30px/1 var(--f-display); box-shadow: var(--shadow); }
-.bnode.whole { background: var(--green); font-size: 36px; } .bnode.p0 { background: var(--lblue); } .bnode.p1 { background: var(--blue); }
+.bnode.whole { background: var(--green); font-size: 36px; }
+/* v0.3.2 counter: the answer tile counts up (white, light-blue number + ring for the smaller part, dark blue for the larger), green on the total */
+.bnode.whole.counting { background: var(--card); color: #5287ea; box-shadow: 0 0 0 3px var(--lblue), var(--shadow); font-size: 38px; }
+.bnode.whole.counting.c1 { color: var(--blue); box-shadow: 0 0 0 3px var(--blue), var(--shadow); }
+.bnode.whole { transition: background-color .18s, color .18s, box-shadow .18s; }
+.fx .plabel { position: absolute; transform: translateX(-50%); font: 700 20px/1 var(--f-display); font-variant-numeric: tabular-nums; }
+.fx .plabel.p0 { color: #5287ea; } .fx .plabel.p1 { color: var(--blue); } .bnode.p0 { background: var(--lblue); } .bnode.p1 { background: var(--blue); }
 .bondlines { width: 100%; height: 100%; overflow: visible; }
 .bondlines line, .labbond line { stroke: var(--line); stroke-width: 4; stroke-linecap: round; }
 .fx .skiphint { top: auto; bottom: 0; left: 0; right: 0; text-align: center; font: 800 11px/1 var(--f-ui); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }

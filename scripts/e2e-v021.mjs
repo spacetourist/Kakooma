@@ -105,7 +105,7 @@ check((await kk(() => document.querySelector('#fx .bondcap')?.textContent)) === 
 const capCol = await kk(() => ({ p0: getComputedStyle(document.querySelector('#fx .bondcap .p0')).color, p1: getComputedStyle(document.querySelector('#fx .bondcap .p1')).color, ctr: getComputedStyle(document.documentElement).getPropertyValue('--lblue').trim() }));
 check(capCol.p0 === 'rgb(82, 135, 234)' && capCol.p1 === 'rgb(58, 123, 255)' && capCol.ctr.toLowerCase() === '#9cc0ff', 'v0.2.3.2: caption smaller-part word is #5287ea, larger-part word stays #3a7bff, counters/tiles token stays #9cc0ff ' + JSON.stringify(capCol));
 await waitPlay(); const teachTotal = Date.now() - tapAt; perf.fullSolveMs = teachTotal;
-check(teachTotal > 5000 && teachTotal < 6300, `full lesson is ~5-6 s (${teachTotal} ms incl. test round-trips)`);
+check(teachTotal > 7000 && teachTotal < 9500, `full lesson (v0.3.2 counting, Hard pace) is ~7.5-9 s (${teachTotal} ms incl. test round-trips)`);
 clearInterval(sampler); await wait(150);
 const during = samples.filter(s => s.phase === 'feedback');
 check(during.length > 15 && during.every(s => !s.running && s.left === during[0].left) && Math.abs(during[0].left - before.rem) < 600, `timer paused for the whole teaching solve (${during.length} samples over ${teachTotal} ms, stayed at ${Math.round(during[0]?.left)} ms)`);

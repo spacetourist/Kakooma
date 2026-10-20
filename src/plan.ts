@@ -62,3 +62,17 @@ export function planTeach(a: number, b: number): Plan {
   const gy = [first, ...fill(yp, Y - f)];
   return finish([gx, gy], { k, X, captions: [`${X} + ${k} = ${X + k}`, `${X + k} + ${Y - k} = ${c}`] });
 }
+
+/** v0.3.2 counting pace: ms between dots landing, each dot's flight, the beat between the two parts. */
+export type Pace = 'easy' | 'medium' | 'hard';
+export function countTiming(pace: Pace, S: number, L: number) {
+  const c = S + L;
+  const fly = pace === 'easy' ? 300 : pace === 'medium' ? 300 : 240;
+  const gap = pace === 'easy' ? 200 : pace === 'medium' ? 150 : 80;
+  // Easy: a dot lands every 300 ms and the next leaves as it lands (no overlap); Medium 150 ms; Hard 60-72 ms with the
+  // whole count capped at ~3 s (dots overlap in flight but each still lands, and counts, on its own frame)
+  const every = pace === 'easy' ? 300 : pace === 'medium' ? 150 : Math.max(60, Math.min(72, (3000 - fly - gap) / c));
+  const land: number[] = [];
+  for (let k = 0; k < c; k++) land.push(fly + k * every + (k >= S ? gap : 0));
+  return { every, fly, gap, land, end: land[c - 1] };
+}

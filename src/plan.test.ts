@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { planTeach } from './plan';
+import { planTeach, countTiming } from './plan';
 
 const evalCap = (s: string) => { const m = s.match(/^(\d+) \+ (\d+) = (\d+)$/); expect(m).not.toBeNull(); return [+m![1], +m![2], +m![3]]; };
 describe('planTeach (make ten)', () => {
@@ -77,6 +77,29 @@ describe('planTeach (make ten)', () => {
       const rows = Math.max(...p.boxes.map(x => x.row)) + 1;
       for (let r = 0; r < rows; r++) { const n = p.boxes.filter(x => x.row === r).length; expect(n).toBeGreaterThan(0); expect(n).toBeLessThanOrEqual(3); }
       if (p.boxes.length <= 3) expect(rows).toBe(1);
+    }
+  });
+});
+
+describe('v0.3.2 counting pace', () => {
+  const per = (l: number[], S: number) => l.slice(1).map((t, i) => t - l[i]).filter((_, i) => i !== S - 1); // gaps, minus the beat between parts
+  it('Easy: 300 ms per dot, one dot in flight at a time; 3 + 7 counts in ~3 s', () => {
+    const t = countTiming('easy', 3, 7);
+    expect(new Set(per(t.land, 3))).toEqual(new Set([300])); expect(t.fly).toBeLessThanOrEqual(t.every);
+    expect(t.end - (t.land[0] - t.fly)).toBeGreaterThanOrEqual(2900); expect(t.end - (t.land[0] - t.fly)).toBeLessThanOrEqual(3300);
+  });
+  it('Medium: 150 ms per dot', () => { expect(new Set(per(countTiming('medium', 7, 12).land, 7))).toEqual(new Set([150])); });
+  it('Hard: 60-72 ms per dot, the count capped at ~3 s even at 50', () => {
+    for (const [a, b] of [[3, 7], [7, 12], [24, 26], [1, 49]]) {
+      const t = countTiming('hard', a, b);
+      expect(t.every).toBeGreaterThanOrEqual(60); expect(t.every).toBeLessThanOrEqual(72);
+      expect(t.end).toBeLessThanOrEqual(3300);
+    }
+  });
+  it('one landing per dot, strictly increasing (so the counter can go up by exactly 1 each time)', () => {
+    for (const pace of ['easy', 'medium', 'hard'] as const) for (const [a, b] of [[3, 7], [7, 12], [24, 26]]) {
+      const l = countTiming(pace, a, b).land;
+      expect(l).toHaveLength(a + b); for (let i = 1; i < l.length; i++) expect(l[i]).toBeGreaterThan(l[i - 1] + 40);
     }
   });
 });

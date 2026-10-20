@@ -40,7 +40,10 @@ const g = await since();
 const names = g.map(x => x[0]), has = n => names.includes(n), t = n => g.find(x => x[0] === n)?.[1];
 for (const n of ['uiTap', 'roundStart', 'tap', 'wrong', 'penalty', 'correct', 'streak(5)', 'newBest', 'replay', 'lowTime', 'tick(5)', 'tick(4)', 'tick(3)', 'tick(2)', 'tick(1)', 'timeUp']) check(has(n), `${n} fired (${t(n)} ms)`);
 check(names.filter(n => n === 'lowTime').length === 1 && names.filter(n => n.startsWith('tick(')).join() === 'tick(5),tick(4),tick(3),tick(2),tick(1)', 'lowTime once; tick 5..1 once each, in order');
-check(names.filter(n => n === 'newBest').length === 1 && names.indexOf('newBest') > names.indexOf('correct'), 'newBest once, after the correct that beats the old best');
+{ // v0.3.1: newBest in-round when the old best is beaten AND at the gold #1 reveal on the results screen (after timeUp), never within 1.5 s
+  const nb = g.map((x, i) => [x[0], x[1], i]).filter(x => x[0] === 'newBest'), iTU = names.indexOf('timeUp');
+  check(nb.length === 2 && nb[0][2] > names.indexOf('correct') && nb[0][2] < iTU && nb[1][2] > iTU && nb[1][1] - nb[0][1] >= 1500, `newBest after the correct that beats the old best, then at the #1 reveal after timeUp (${nb.length}x, ${nb.length === 2 ? Math.round(nb[1][1] - nb[0][1]) : '?'} ms apart)`);
+}
 check(t('tick(1)') < t('timeUp') && t('lowTime') < t('tick(5)'), 'lowTime < tick(5..1) < timeUp');
 check(Math.abs(t('penalty') - t('wrong') - 150) <= 5, `penalty scheduled 150 ms after wrong (${t('penalty') - t('wrong')} ms)`);
 // Bond Lab

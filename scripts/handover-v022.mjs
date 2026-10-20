@@ -19,7 +19,10 @@ const browser = await chromium.launch({ executablePath: '/usr/bin/google-chrome'
 const ctxOpts = { viewport: { width: 412, height: 915 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true };
 const P = (nums, a, b) => ({ nums, a, b, answer: a + b });
 const sums = [['6+11', 5, P([6, 11, 17, 30, 9], 6, 11)], ['7+12', 5, P([7, 9, 12, 19, 4], 7, 12)], ['2+5', 5, P([2, 5, 7, 13, 16], 2, 5)], ['28+29', 7, P([28, 29, 57, 2, 5, 13, 40], 28, 29)]];
-const OFFS = Array.from({ length: 12 }, (_, i) => 1500 + i * 100);
+// v0.3.2: the counting stage made the lesson longer, so the window is anchored on the handover itself: a pilot lesson
+// measures when the make-ten starts fading (stage 'absorb'); frames are checked from absorb - 300 ms to absorb + 800 ms
+// (the v0.2.2 window, 1.5-2.6 s, was the same span around absorb at ~1.8 s) and shot every 100 ms in it.
+let OFFS = [];
 const fails = [], summary = {};
 const page = await browser.newPage(ctxOpts);
 const errs = []; page.on('pageerror', e => errs.push(e.message));
@@ -31,10 +34,23 @@ for (const [name, n, p] of sums.filter(s => !process.env.ONLY || s[0] === proces
   await page.evaluate(q => { window.__kkNext = Array.from({ length: 30 }, () => q); }, p);
   await tap('#mStart'); await page.waitForFunction(() => window.__kk.phase === 'play');
   const stats = { frames: 0, overlap: [], outside: [], total: [] };
+  { // pilot: when does the handover start?
+    await page.waitForTimeout(250);
+    await page.evaluate(() => { window.__pilot = { t0: 0, abs: 0 }; document.getElementById('board').addEventListener('pointerdown', () => { window.__pilot.t0 = performance.now(); }, { capture: true, once: true });
+      const f = () => { if (window.__pilot.t0 && window.__kk.teachStage === 'absorb' && !window.__pilot.abs) window.__pilot.abs = performance.now() - window.__pilot.t0; if (!window.__pilot.abs) requestAnimationFrame(f); }; requestAnimationFrame(f); });
+    const i = await page.evaluate(() => window.__kk.puzzle.nums.indexOf(window.__kk.puzzle.answer));
+    await tap(`.tile[data-i="${i}"]`);
+    await page.waitForFunction(() => window.__pilot.abs > 0, null, { timeout: 15000 });
+    const abs = await page.evaluate(() => window.__pilot.abs);
+    await page.waitForFunction(() => window.__kk.phase === 'play', null, { timeout: 15000 });
+    const w0 = Math.round((abs - 300) / 100) * 100;
+    OFFS = Array.from({ length: 12 }, (_, i) => w0 + i * 100);
+    stats.absorbAt = Math.round(abs);
+  }
   for (const off of OFFS) {
     await page.waitForTimeout(250);
     // in-page monitor: from the tap, check every animation frame between 1500 and 2600 ms
-    await page.evaluate(() => {
+    await page.evaluate(([W0, W1]) => {
       window.__mon = { t0: 0, bad: [], frames: 0 };
       const vis = e => +getComputedStyle(e).opacity > 0.01;
       const inter = (a, b, pad = 0) => a.left < b.right - pad && b.left < a.right - pad && a.top < b.bottom - pad && b.top < a.bottom - pad;
@@ -42,7 +58,7 @@ for (const [name, n, p] of sums.filter(s => !process.env.ONLY || s[0] === proces
       const f = () => {
         const m = window.__mon; if (!m.t0) return requestAnimationFrame(f);
         const t = performance.now() - m.t0;
-        if (t >= 1500 && t <= 2600 && window.__kk.phase !== 'play') {
+        if (t >= W0 && t <= W1 && window.__kk.phase !== 'play') {
           m.frames++;
           const ans = document.querySelector('#fx > .bnode.whole');
           const shown = [...document.querySelectorAll('#fx .tf'), ...document.querySelectorAll('#fx .tcap:not(.bondcap)')].filter(vis);
@@ -51,22 +67,22 @@ for (const [name, n, p] of sums.filter(s => !process.env.ONLY || s[0] === proces
           for (const c of document.querySelectorAll('#fx .ctr')) { if (!vis(c)) continue; const r = c.getBoundingClientRect();
             if (!cells.some(q => r.left >= q.left - 1 && r.right <= q.right + 1 && r.top >= q.top - 1 && r.bottom <= q.bottom + 1)) { m.bad.push(`${Math.round(t)}ms counter outside its square op=${getComputedStyle(c).opacity}`); break; } }
         }
-        if (t < 2700 && window.__kk.phase !== 'play') requestAnimationFrame(f); else m.done = true;
+        if (t < W1 + 100 && window.__kk.phase !== 'play') requestAnimationFrame(f); else m.done = true;
       };
       requestAnimationFrame(f);
       document.getElementById('board').addEventListener('pointerdown', () => { window.__mon.t0 = performance.now(); }, { capture: true, once: true });
-    });
+    }, [OFFS[0], OFFS[0] + 1100]);
     const i = await page.evaluate(() => window.__kk.puzzle.nums.indexOf(window.__kk.puzzle.answer));
     await tap(`.tile[data-i="${i}"]`);
     const now = await page.evaluate(() => performance.now() - window.__mon.t0); if (off > now) await page.waitForTimeout(off - now);
     const at = Math.round(await page.evaluate(() => performance.now() - window.__mon.t0));
     await page.screenshot({ path: `${SHOTS}${process.env.SHOT_TAG || "v023"}-handover${process.env.REDUCED ? '-reduced' : ''}-${name.replace('+', '-')}-${off}.png` });
-    await page.waitForFunction(() => window.__kk.phase === 'play' && window.__mon.done, null, { timeout: 8000 });
+    await page.waitForFunction(() => window.__kk.phase === 'play' && window.__mon.done, null, { timeout: 16000 });
     const m = await page.evaluate(() => window.__mon);
     stats.frames += m.frames; stats.overlap.push(...m.bad.filter(b => b.includes('overlap'))); stats.outside.push(...m.bad.filter(b => b.includes('outside')));
     stats.total.push(at);
   }
-  summary[name] = { checkedFrames: stats.frames, overlapFrames: stats.overlap.length, counterOutside: stats.outside.length, shotAt: stats.total.join(','), firstBad: [...stats.overlap, ...stats.outside].slice(0, 3) };
+  summary[name] = { absorbAt: stats.absorbAt, window: `${OFFS[0]}-${OFFS[0] + 1100} ms`, checkedFrames: stats.frames, overlapFrames: stats.overlap.length, counterOutside: stats.outside.length, shotAt: stats.total.join(','), firstBad: [...stats.overlap, ...stats.outside].slice(0, 3) };
   if (stats.overlap.length || stats.outside.length || stats.frames < 100) fails.push(name);
 }
 console.log(JSON.stringify(summary, null, 1));

@@ -226,7 +226,7 @@ function runTeach(s: Solved, iC: number, then: () => void) {
   requestAnimationFrame(() => {
     if (ended) return;
     real = teach({ layer: fxEl, tiles, centre: i => ({ x: cur[i].x, y: cur[i].y }), n: s.nums.length,
-      iS: s.nums.indexOf(s.a), iL: s.nums.indexOf(s.b), iC, onHop: blazeHop, onStage: g => { st.teachStage = g; if (g === 'clear') showSum(null); } }, s.a, s.b);
+      iS: s.nums.indexOf(s.a), iL: s.nums.indexOf(s.b), iC, pace: st.lv, onHop: blazeHop, onStage: g => { st.teachStage = g; if (g === 'clear') showSum(null); } }, s.a, s.b);
     real.done.then(end);
   });
 }
