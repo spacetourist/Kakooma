@@ -41,13 +41,13 @@ async function tilesOnCorners(n) {
     const cx = c.reduce((s, p) => s + p[0], 0) / c.length, cy = c.reduce((s, p) => s + p[1], 0) / c.length;
     const d = c.map(p => Math.hypot(p[0] - cx, p[1] - cy));
     const minGap = Math.min(...c.flatMap((p, i) => c.slice(i + 1).map(q => Math.hypot(p[0] - q[0], p[1] - q[1]))));
-    const tile = vis[0].getBoundingClientRect().width;
+    const tile = vis[0].querySelector('.tile').getBoundingClientRect().width; // v0.3: in the menu the visible corner is a small dot
     const inside = c.every(p => p[0] - tile / 2 >= -1 && p[0] + tile / 2 <= b.width + 1);
     return { count: vis.length, want: n, spread: Math.max(...d) - Math.min(...d), minGap, tile, inside, poly: document.getElementById('outlinePoly').getAttribute('points').split(' ').length };
   }, n);
 }
 
-await page.goto(BASE + '?teach=quick&round=' + ROUND); await kk(() => localStorage.clear()); await page.reload();
+await page.goto(BASE + '?level=hard&teach=quick&round=' + ROUND); await kk(() => localStorage.clear()); await page.reload();
 await page.waitForFunction(() => document.fonts.status === 'loaded');
 check(new RegExp('^' + (process.env.EXPECT_VER || 'v0\\.1') + '$').test(await page.textContent('#verLabel')), 'menu shows version v0.1: ' + await page.textContent('#verLabel'));
 check((await page.textContent('.wordmark')) === 'KAKOOMA', 'wordmark KAKOOMA');
@@ -58,7 +58,7 @@ await shot('01-menu');
 // picker slide: mid-animation tiles are between corners
 await tapEl('#picker [data-n="7"]'); await wait(90);
 const mid = await tilesOnCorners(7); await wait(350); g = await tilesOnCorners(7);
-check(g.count === 7 && g.spread < 2 && g.minGap > g.tile, 'picker 7: tiles on heptagon corners, no overlap ' + JSON.stringify(g));
+check(g.count === 7 && g.spread < 2 && g.minGap > g.tile, 'picker 7: corners on the heptagon, no overlap ' + JSON.stringify(g));
 check(mid.spread > 2 || mid.count !== 7, 'picker change animates (mid-slide not yet on corners)');
 await pickN(4);
 
@@ -157,7 +157,7 @@ await tapEl('#bMenu'); await wait(100);
 check(await kk(() => window.__kk.phase === 'menu' && !document.getElementById('play').classList.contains('hidden')), 'leaderboard Menu returns to menu');
 // results Menu button + persistence across reload
 await page.reload(); await page.waitForFunction(() => window.__kk);
-check((await kk(() => JSON.parse(localStorage.getItem('kk.board.v1')).length)) === 2, 'leaderboard persists across reload (localStorage)');
+check((await kk(() => JSON.parse(localStorage.getItem('kk.board.v2')).length)) === 2, 'leaderboard persists across reload (localStorage)');
 await tapEl('#mStart'); await waitPlay(); await tapEl('#gQuit'); await wait(50);
 await tapEl('#mStart'); await page.waitForSelector('#results:not(.hidden)', { timeout: (ROUND + 5) * 1000 });
 check(await kk(() => document.getElementById('nameCard').classList.contains('hidden')), 'zero score: no save prompt');

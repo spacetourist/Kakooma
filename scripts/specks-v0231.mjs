@@ -25,7 +25,7 @@ const page = await browser.newPage(ctxOpts); const errs = []; page.on('pageerror
 const tap = async sel => { const bb = await page.locator(sel).first().boundingBox(); await page.touchscreen.tap(bb.x + bb.width / 2, bb.y + bb.height / 2); };
 const out = [];
 for (const [name, n, p] of sums) {
-  await page.goto(BASE + '?round=600&teach=full'); await page.waitForFunction(() => document.fonts.status === 'loaded');
+  await page.goto(BASE + '?level=hard&round=600&teach=full'); await page.waitForFunction(() => document.fonts.status === 'loaded');
   await page.evaluate(() => localStorage.clear());
   await tap(`#picker [data-n="${n}"]`); await page.waitForTimeout(200);
   await page.evaluate(q => { window.__kkNext = Array.from({ length: 40 }, () => q); }, p);

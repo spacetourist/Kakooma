@@ -22,7 +22,7 @@ const cases = [['7 + 12', 5, P([7, 9, 12, 19, 4], 7, 12)], ['2 + 5', 5, P([2, 5,
 const out = {};
 for (const reduced of [false, true]) for (const [name, n, p] of cases) {
   const page = await browser.newPage(ctxOpts);
-  await page.goto(BASE + '?round=60&teach=full' + (reduced ? '&reduced' : ''));
+  await page.goto(BASE + '?level=hard&round=60&teach=full' + (reduced ? '&reduced' : ''));
   await page.waitForFunction(() => document.fonts.status === 'loaded');
   await page.evaluate(() => localStorage.clear());
   const tap = async sel => { const bb = await page.locator(sel).first().boundingBox(); await page.touchscreen.tap(bb.x + bb.width / 2, bb.y + bb.height / 2); };

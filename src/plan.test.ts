@@ -12,6 +12,21 @@ describe('planTeach (make ten)', () => {
     const p = planTeach(3, 4);
     expect(p.boxes).toEqual([{ row: 0 }]); expect(p.captions).toEqual(['3 + 4 = 7']); expect(p.k).toBe(0);
   });
+  it('v0.3: exactly ten fills one frame with one caption (no "10 + 0 = 10")', () => {
+    for (const [x, y] of [[3, 7], [1, 9], [4, 6]]) {
+      const p = planTeach(x, y);
+      expect(p.boxes).toEqual([{ row: 0 }]); expect(p.captions).toEqual([`${x} + ${y} = 10`]); expect(p.k).toBe(0);
+      expect(p.counters.map(c => c.part)).toEqual([...Array(x).fill(0), ...Array(y).fill(1)]);
+    }
+  });
+  it('v0.3: Hard tops out at 50: frames stay full size, in rows of at most 3', () => {
+    for (let x = 1; x < 50; x++) for (let y = x + 1; x + y <= 50; y++) {
+      const p = planTeach(x, y), rows = new Map<number, number>();
+      for (const b of p.boxes) rows.set(b.row, (rows.get(b.row) ?? 0) + 1);
+      expect(Math.max(...rows.values())).toBeLessThanOrEqual(3); expect(rows.size).toBeLessThanOrEqual(2);
+      expect(p.counters.filter(c => c.part === 0)).toHaveLength(x); expect(p.counters.filter(c => c.part === 1)).toHaveLength(y);
+    }
+  });
   it('big sums: 17 + 25 bridges 17 -> 20', () => { expect(planTeach(17, 25).captions).toEqual(['17 + 3 = 20', '20 + 22 = 42']); });
   it('both whole tens: no bridge', () => { expect(planTeach(10, 20).captions).toEqual(['10 + 20 = 30']); });
   it('10 + 13 bridges the 13', () => { expect(planTeach(10, 13).captions).toEqual(['13 + 7 = 20', '20 + 3 = 23']); });

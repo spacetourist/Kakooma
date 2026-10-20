@@ -136,6 +136,7 @@ export function teach(ctx: TeachCtx, a: number, b: number): TeachRun {
       fadeIn(caps[1]); ctx.onStage?.('ten2');
       if (await wait(reduced ? 600 : 420)) return;
     } else {
+      if (plan.c === 10) frames[0].classList.add('ten'); // v0.3: exactly ten fills the one frame: ring it like a made ten
       fadeIn(caps[0]); ctx.onStage?.('sum');
       if (await wait(reduced ? 700 : 560)) return;
     }

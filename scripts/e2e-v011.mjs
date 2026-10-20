@@ -45,7 +45,7 @@ const sumState = () => kk(() => {
 const BLUE = 'rgb(58, 123, 255)', GREEN = 'rgb(34, 197, 94)';
 const centreClear = () => kk(() => { const b = document.getElementById('board'); return [...b.children].filter(e => !e.classList.contains('slot') && !e.classList.contains('outline') && e.id !== 'fx').length === 0 && !/=/.test(document.getElementById('fx')?.textContent || ''); });
 
-await page.goto(BASE + '?teach=quick&round=45'); await kk(() => localStorage.clear()); await page.reload();
+await page.goto(BASE + '?level=hard&teach=quick&round=45'); await kk(() => localStorage.clear()); await page.reload();
 await page.waitForFunction(() => document.fonts.status === 'loaded');
 check((await page.textContent('#verLabel')) === (process.env.EXPECT_VER || 'v0.1.1'), 'menu shows v0.1.1: ' + await page.textContent('#verLabel'));
 await tapEl('#picker [data-n="5"]'); await wait(400);

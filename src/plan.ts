@@ -37,7 +37,8 @@ export function planTeach(a: number, b: number): Plan {
     for (let left = n; left > 0; left -= 10) { const bx = nBox++; ids.push(bx); for (let i = 0; i < Math.min(10, left); i++) counters.push({ part, slot: { box: bx, cell: i } }); }
     return ids;
   };
-  if (c < 10) { // under ten: one frame, smaller part first then larger
+  if (c <= 10) { // under ten: one frame, smaller part first then larger. v0.3: exactly ten too (Easy tops out at 10):
+    // both parts fill one frame, so there is nothing to bridge (no "10 + 0 = 10" second step)
     const bx = nBox++;
     for (let i = 0; i < c; i++) counters.push({ part: i < S ? 0 : 1, slot: { box: bx, cell: i } });
     return finish([[bx]], { k: 0, X: 0, captions: [`${S} + ${L} = ${c}`] });

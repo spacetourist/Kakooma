@@ -52,7 +52,7 @@ button { font: inherit; color: inherit; border: 0; background: none; padding: 0;
 #play[data-mode="menu"] .streak-pill { visibility: hidden; }
 
 /* board */
-.board { position: relative; flex: 0 0 auto; height: clamp(260px, calc(100dvh - 570px), 440px); touch-action: manipulation; }
+.board { position: relative; flex: 0 0 auto; height: clamp(170px, calc(100dvh - 660px), 400px); touch-action: manipulation; }
 #play[data-mode="game"] .board { height: clamp(260px, calc(100dvh - 545px), 420px); }
 .outline { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
 .outline polygon { fill: none; stroke: var(--line); stroke-width: 1.5; stroke-linejoin: round; }
@@ -66,6 +66,10 @@ button { font: inherit; color: inherit; border: 0; background: none; padding: 0;
 .tile.add { background: var(--blue); color: #fff; }
 .tile.bad { box-shadow: 0 0 0 3px var(--coral), var(--shadow); color: var(--coral); }
 .prompt { margin: 6px 0 0; text-align: center; font: 700 15px/1.3 var(--f-ui); color: var(--muted); }
+
+/* v0.3 menu preview: the shape only (outline + plain corner dots, no numbers), so it never reads as a play board */
+#play[data-mode="menu"] .outline polygon { stroke: #c9cfdf; stroke-width: 3; }
+#play[data-mode="menu"] .tile { transform: scale(.26); background: var(--ink); box-shadow: none; color: transparent; pointer-events: none; transition: none; }
 
 /* sum strip (under the board; the board centre stays clear for v0.2) */
 .sum { flex: 0 0 auto; height: 68px; margin-top: 8px; border-radius: var(--r-pill); background: var(--card); box-shadow: var(--shadow);
@@ -93,6 +97,17 @@ button { font: inherit; color: inherit; border: 0; background: none; padding: 0;
 .picker button { height: 52px; border-radius: 13px; display: grid; place-items: center; color: var(--ink); transition: background-color .15s, color .15s; }
 .picker button.on { background: var(--blue); color: #fff; }
 .picker svg { width: 38px; height: 38px; overflow: visible; }
+/* v0.3 level picker: big kid-friendly segments, number on top ("10"), word under it ("Easy") */
+.levels { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; padding: 6px; background: var(--card); border-radius: var(--r-pill); box-shadow: var(--shadow); }
+.levels button { height: 60px; border-radius: 13px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; color: var(--ink); transition: background-color .15s, color .15s; }
+.levels button span { font: 700 26px/1 var(--f-display); font-variant-numeric: tabular-nums; }
+.levels button b { font: 800 13px/1 var(--f-ui); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); transition: color .15s; }
+.levels button.on { background: var(--blue); color: #fff; } .levels button.on b { color: #fff; }
+.levels.sm { margin-top: 8px; } .levels.sm button { height: 52px; } .levels.sm button span { font-size: 22px; }
+.lbl2 { margin-top: 14px; }
+.picker button.off { color: #c9cfdf; }
+.best .note-in { color: var(--ink); font-size: 13px; line-height: 1.25; }
+.lvtag { display: inline-block; padding: 3px 9px; margin-right: 4px; border-radius: 10px; background: var(--blue); color: #fff; font: 800 12px/1.2 var(--f-ui); letter-spacing: .04em; text-transform: uppercase; vertical-align: 1px; }
 .best { margin-top: 14px; text-align: center; font: 700 15px/1 var(--f-ui); color: var(--muted); min-height: 15px; }
 .best b { color: var(--ink); }
 .lblrow { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; }

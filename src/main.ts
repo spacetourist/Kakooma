@@ -1,5 +1,5 @@
 import './style.css';
-import { generate, sumKey, type Puzzle } from './puzzle';
+import { generate, sumKey, type Puzzle, type Level, LEVELS, CAP, LEVEL_NAME, isLevel, supports } from './puzzle';
 import { teach, type TeachRun } from './teach';
 import { haptic, ripple, reducedMotion } from './fx';
 import { sfx } from './sfx';
@@ -14,7 +14,9 @@ const ROUND_MS = Math.max(5, Math.min(600, Number(Q.get('round')) || 60)) * 1000
 const PENALTY_MS = 3000;          // wrong tap
 const FEEDBACK_MS = 500;          // correct-answer feedback; the round timer is PAUSED for it
 const SLIDE_MS = 250;             // picker change: tiles slide to the new corners
-const LS = { board: 'kk.board.v1', n: 'kk.n' };
+/** v0.3: boards are per level + number count (kk.board.v2); v1 (no level) is migrated once to Hard and left in place as a backup. */
+const LS = { board: 'kk.board.v2', boardV1: 'kk.board.v1', n: 'kk.n', lv: 'kk.lv' };
+const lvName = (lv: Level) => `${LEVEL_NAME[lv]} ${CAP[lv]}`;
 /** ?teach=quick|full forces the solve animation (testing). Default: full on the first 3 solves, milestones, new best, after a mistake, chip taps. */
 const TEACH = Q.get('teach');
 const MAX = 7;
@@ -22,10 +24,10 @@ const MAX = 7;
 type Phase = 'menu' | 'play' | 'feedback' | 'replay' | 'done';
 /** One solved puzzle; kept per round so a tray chip can replay its explanation in v0.2. */
 interface Solved { a: number; b: number; c: number; nums: number[]; n: number; ms: number }
-interface Entry { name: string; n: number; score: number; streak: number; avg: number | null; miss: number; at: number }
+interface Entry { name: string; lv: Level; n: number; score: number; streak: number; avg: number | null; miss: number; at: number }
 
 const st = {
-  phase: 'menu' as Phase, n: 5, puzzle: null as Puzzle | null,
+  phase: 'menu' as Phase, n: 5, lv: 'easy' as Level, lastKey: '', puzzle: null as Puzzle | null,
   left: ROUND_MS, since: 0, running: false,
   score: 0, miss: 0, streak: 0, best: 0, solve: [] as number[], solved: [] as Solved[], shownAt: 0, pausedAt: 0,
   prevBest: 0, teach: null as { skip: () => void } | null, teachCount: 0, teachStage: '', seen: new Set<string>(), badTiles: new Set<number>(), timers: new Set<number>(), run: 0,
@@ -248,8 +250,9 @@ function show(id: 'play' | 'results' | 'boards' | 'lab') { for (const s of ['pla
 
 function startRound() {
   cancelTimers(); st.run++;
-  Object.assign(st, { phase: 'play', left: ROUND_MS, running: false, score: 0, miss: 0, streak: 0, best: 0, solve: [], solved: [], seen: new Set<string>() });
-  tray.replaceChildren(); newestChip = null; st.prevBest = boardFor(st.n)[0]?.score ?? 0; st.teachCount = 0;
+  if (!supports(st.n, st.lv)) st.n = 5;
+  Object.assign(st, { phase: 'play', left: ROUND_MS, running: false, score: 0, miss: 0, streak: 0, best: 0, solve: [], solved: [], seen: new Set<string>(), lastKey: '' });
+  tray.replaceChildren(); newestChip = null; st.prevBest = boardFor(st.lv, st.n)[0]?.score ?? 0; st.teachCount = 0;
   scoreTxt.textContent = '0'; setStreak(0, 0); lastTenth = lastSegs = -1; lastLow = null; drawTimer(ROUND_MS);
   setMode('game'); show('play');
   layout(st.n, 0);
@@ -263,8 +266,8 @@ function nextPuzzle() {
   showSum(null);
   // window.__kkNext: optional queue of puzzles for automated tests (deterministic stage shots); normal play never sets it
   const q = (window as any).__kkNext as Puzzle[] | undefined;
-  const p = q?.length ? q.shift()! : generate(st.n, Math.random, st.seen); // no sum repeats within a round (reset in startRound)
-  st.seen.add(sumKey(p.a, p.b));
+  const p = q?.length ? q.shift()! : generate(st.n, Math.random, st.seen, st.lv, st.lastKey); // no sum repeats within a round (reset in startRound); small pools cycle
+  st.seen.add(sumKey(p.a, p.b)); st.lastKey = sumKey(p.a, p.b);
   showPuzzle(p, true);
   const now = performance.now();
   st.shownAt = now; st.phase = 'play'; resume(now);
@@ -320,12 +323,24 @@ function onTap(i: number, now: number) {
 function quit() { cancelTimers(); st.run++; st.phase = 'menu'; st.running = false; toMenu(); }
 
 // ---------- leaderboard (localStorage, per N, top 10) ----------
-function loadAll(): Entry[] { try { const a = JSON.parse(localStorage.getItem(LS.board) || '[]'); return Array.isArray(a) ? a : []; } catch { return []; } }
+const parse = (k: string): any[] | null => { try { const a = JSON.parse(localStorage.getItem(k) || 'null'); return Array.isArray(a) ? a : null; } catch { return null; } };
+/** v1 had no level and no cap (largest tile 40-58), so every v1 score is kept as Hard. Runs once: v2 then exists. */
+function migrateV1(): Entry[] {
+  const old = parse(LS.boardV1) ?? [];
+  const out: Entry[] = old.filter(e => e && typeof e.score === 'number' && [4, 5, 6, 7].includes(e.n)).map(e => ({ ...e, lv: 'hard' as Level }));
+  saveAll(out);
+  return out;
+}
+function loadAll(): Entry[] {
+  const a = parse(LS.board);
+  if (!a) return localStorage.getItem(LS.boardV1) ? migrateV1() : [];
+  return a.map(e => (isLevel(e.lv) ? e : { ...e, lv: 'hard' }));
+}
 function saveAll(a: Entry[]) { try { localStorage.setItem(LS.board, JSON.stringify(a)); } catch { /* storage full/blocked */ } }
 const nz = (x: number | null) => (x == null ? Infinity : x);
 const cmp = (a: Entry, b: Entry) => b.score - a.score || b.streak - a.streak || nz(a.avg) - nz(b.avg) || a.at - b.at;
-const boardFor = (n: number) => loadAll().filter(e => e.n === n).sort(cmp).slice(0, 10);
-function qualifies(e: Entry) { if (e.score <= 0) return false; const b = boardFor(e.n); return b.length < 10 || cmp(e, b[b.length - 1]) < 0; }
+const boardFor = (lv: Level, n: number) => loadAll().filter(e => e.lv === lv && e.n === n).sort(cmp).slice(0, 10);
+function qualifies(e: Entry) { if (e.score <= 0) return false; const b = boardFor(e.lv, e.n); return b.length < 10 || cmp(e, b[b.length - 1]) < 0; }
 const sec = (ms: number | null) => (ms == null ? '—' : `${(ms / 1000).toFixed(1)}s`);
 
 // ---------- results ----------
@@ -335,15 +350,15 @@ function endRound() {
   cancelTimers(); st.run++; pause(performance.now()); st.left = 0; drawTimer(0);
   st.phase = 'done';
   const avg = st.solve.length ? Math.round(st.solve.reduce((s, x) => s + x, 0) / st.solve.length) : null;
-  const e: Entry = { name: '', n: st.n, score: st.score, streak: st.best, avg, miss: st.miss, at: Date.now() };
-  $('rSub').textContent = `${SHAPE[st.n]} · ${st.n} numbers · ${ROUND_MS / 1000}s round`;
+  const e: Entry = { name: '', lv: st.lv, n: st.n, score: st.score, streak: st.best, avg, miss: st.miss, at: Date.now() };
+  $('rSub').innerHTML = `<span class="lvtag lv-${st.lv}">${lvName(st.lv)}</span> ${SHAPE[st.n]} · ${st.n} numbers · ${ROUND_MS / 1000}s round`;
   $('rScore').textContent = String(e.score);
   $('rStreak').textContent = `x${e.streak}`; $('rAvg').textContent = sec(avg); $('rMiss').textContent = String(e.miss);
   const q = qualifies(e);
-  const pos = [...boardFor(e.n), e].sort(cmp).indexOf(e) + 1;
+  const pos = [...boardFor(e.lv, e.n), e].sort(cmp).indexOf(e) + 1;
   $('rRank').innerHTML = q
-    ? `<span class="pos">#${pos}</span><span>${pos === 1 ? 'New top score' : 'Leaderboard place'} on the ${SHAPE[e.n]} board</span>`
-    : `<span class="pos na">—</span><span>${e.score ? `Not in the ${SHAPE[e.n]} top 10 this time` : 'Solve one to get on the board'}</span>`;
+    ? `<span class="pos">#${pos}</span><span>${pos === 1 ? 'New top score' : 'Leaderboard place'} on ${LEVEL_NAME[e.lv]} ${SHAPE[e.n]}</span>`
+    : `<span class="pos na">—</span><span>${e.score ? `Not in the ${LEVEL_NAME[e.lv]} ${SHAPE[e.n]} top 10 this time` : 'Solve one to get on the board'}</span>`;
   pending = q ? e : null;
   $('nameCard').classList.toggle('hidden', !q);
   nameIn.value = ''; renderSlots();
@@ -369,57 +384,95 @@ function saveName() {
   const name = nameIn.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 3);
   if (!pending || !name) return;
   const e = pending; pending = null; e.name = name;
-  const all = loadAll(), mine = [...all.filter(x => x.n === e.n), e].sort(cmp).slice(0, 10);
-  saveAll([...all.filter(x => x.n !== e.n), ...mine]);
-  lastSaved = e.at; nameIn.blur(); showBoards(e.n);
+  const all = loadAll(), same = (x: Entry) => x.n === e.n && x.lv === e.lv, mine = [...all.filter(same), e].sort(cmp).slice(0, 10);
+  saveAll([...all.filter(x => !same(x)), ...mine]);
+  lastSaved = e.at; nameIn.blur(); showBoards(e.n, e.lv);
 }
 press($('rRetry'), () => { pending = null; startRound(); });
 press($('rMenu'), () => { pending = null; toMenu(); });
 
 // ---------- leaderboard screen ----------
-let boardN = 5;
-function showBoards(n: number) {
-  boardN = n;
-  $('bTabs').innerHTML = NS.map(k => `<button type="button" role="tab" aria-label="${SHAPE[k]} (${k} numbers)" aria-selected="${k === n}" class="${k === n ? 'on' : ''}" data-n="${k}">${iconSvg(k)}</button>`).join('');
-  $('bHead').textContent = `${SHAPE[n]} · ${n} numbers`;
-  const b = boardFor(n);
+let boardN = 5, boardLv: Level = 'easy';
+/** Level segmented control (menu + leaderboard): big two-line segments, "Easy" over "10". */
+const levelSeg = (on: Level) => LEVELS.map(l => `<button type="button" role="radio" aria-checked="${l === on}" aria-label="${LEVEL_NAME[l]}, numbers up to ${CAP[l]}" class="lv-${l}${l === on ? ' on' : ''}" data-lv="${l}"><b>${LEVEL_NAME[l]}</b><span>${CAP[l]}</span></button>`).join('');
+/** A shape a level cannot make (Easy: 6 or 7 numbers) is shown greyed and explains itself when tapped. */
+const shapeOk = (lv: Level, n: number) => supports(n, lv);
+const fallbackN = (lv: Level, n: number) => (shapeOk(lv, n) ? n : Math.max(...NS.filter(k => shapeOk(lv, k))));
+const noShape = (lv: Level, n: number) => `${SHAPE[n]} needs Medium or Hard: ${n} different numbers up to ${CAP[lv]} can't make a fair board`;
+function showBoards(n: number, lv: Level = boardLv) {
+  n = fallbackN(lv, n); boardN = n; boardLv = lv;
+  $('bLevels').innerHTML = levelSeg(lv);
+  $('bTabs').innerHTML = NS.map(k => `<button type="button" role="tab" aria-label="${SHAPE[k]} (${k} numbers)" aria-selected="${k === n}" aria-disabled="${!shapeOk(lv, k)}" class="${k === n ? 'on' : ''}${shapeOk(lv, k) ? '' : ' off'}" data-n="${k}">${iconSvg(k)}</button>`).join('');
+  $('bHead').innerHTML = `<span class="lvtag lv-${lv}">${lvName(lv)}</span> ${SHAPE[n]} · ${n} numbers`;
+  const b = boardFor(lv, n);
   $('bRows').innerHTML = `<div class="row head"><span>#</span><span>Name</span><span class="r">Score</span><span class="r">Streak</span><span class="r">Avg</span></div>` +
     (b.length ? b.map((e, i) => `<div class="row${e.at === lastSaved ? ' you' : ''}"><span class="rk${i < 3 ? ' g' + (i + 1) : ''}">${i + 1}</span><span class="nm">${esc(e.name)}</span><span class="r">${e.score}</span><span class="r">x${e.streak}</span><span class="r">${sec(e.avg)}</span></div>`).join('')
       : `<div class="empty">No scores yet. Be the first!</div>`);
   $('bRetry').classList.toggle('hidden', !fromGame);
   show('boards');
 }
-press($('bTabs'), e => { const b = (e.target as HTMLElement).closest('button'); if (b) showBoards(+b.dataset.n!); });
+press($('bTabs'), e => { const b = (e.target as HTMLElement).closest('button'); if (!b) return; const k = +b.dataset.n!; if (!shapeOk(boardLv, k)) { $('bHead').textContent = noShape(boardLv, k); return; } showBoards(k); });
+press($('bLevels'), e => { const b = (e.target as HTMLElement).closest('button'); if (b && isLevel(b.dataset.lv)) showBoards(boardN, b.dataset.lv); });
 press($('bRetry'), () => startRound());
 press($('bMenu'), () => toMenu());
 
 // ---------- menu ----------
 const picker = $('picker');
 picker.innerHTML = NS.map(k => `<button type="button" role="radio" aria-label="${SHAPE[k]} (${k} numbers)" data-n="${k}">${iconSvg(k)}</button>`).join('');
+const levels = $('levels');
+let note = '';
 function renderPicker() {
-  for (const b of picker.querySelectorAll<HTMLButtonElement>('button')) { const on = +b.dataset.n! === st.n; b.classList.toggle('on', on); b.setAttribute('aria-checked', String(on)); }
-  const top = boardFor(st.n)[0];
-  $('bestLine').innerHTML = top ? `Best on ${SHAPE[st.n]}: <b>${top.score}</b> by <b>${esc(top.name)}</b>` : `${SHAPE[st.n]} · ${st.n} numbers`;
+  levels.innerHTML = levelSeg(st.lv);
+  for (const b of picker.querySelectorAll<HTMLButtonElement>('button')) {
+    const k = +b.dataset.n!, on = k === st.n, ok = shapeOk(st.lv, k);
+    b.classList.toggle('on', on); b.classList.toggle('off', !ok); b.setAttribute('aria-checked', String(on)); b.setAttribute('aria-disabled', String(!ok));
+  }
+  const top = boardFor(st.lv, st.n)[0];
+  $('bestLine').innerHTML = note ? `<span class="note-in">${esc(note)}</span>`
+    : top ? `Best on ${LEVEL_NAME[st.lv]} ${SHAPE[st.n]}: <b>${top.score}</b> by <b>${esc(top.name)}</b>` : `${SHAPE[st.n]} · ${st.n} numbers up to ${CAP[st.lv]}`;
 }
+/** Menu preview (v0.3): the shape only, outline + plain corner dots, no numbers (it is a shape picker, not a board). */
+function showShape() { st.puzzle = null; for (const t of tiles) { t.className = 'tile'; t.textContent = ''; } }
+/** Build the level's board table in idle time so the first board of a round never waits for it (Medium 7: ~30 ms on desktop). */
+const warm = () => { const f = (window as any).requestIdleCallback ?? ((cb: () => void) => setTimeout(cb, 50)); f(() => { try { generate(st.n, Math.random, undefined, st.lv); } catch { /* unsupported combo */ } }); };
+let noteTimer = 0;
+function flashNote(t: string) { note = t; clearTimeout(noteTimer); noteTimer = window.setTimeout(() => { note = ''; if (st.phase === 'menu') renderPicker(); }, 2600); renderPicker(); }
+function setN(n: number, ms: number) { if (n === st.n) return; st.n = n; try { localStorage.setItem(LS.n, String(n)); } catch {} layout(n, ms); }
 press(picker, e => {
   const b = (e.target as HTMLElement).closest('button'); if (!b) return;
-  const n = +b.dataset.n!; if (n === st.n) return;
-  st.n = n; try { localStorage.setItem(LS.n, String(n)); } catch {}
-  renderPicker(); showPuzzle(generate(n), false); layout(n, SLIDE_MS);
+  const n = +b.dataset.n!;
+  if (!shapeOk(st.lv, n)) { flashNote(noShape(st.lv, n)); sfx.uiTap(); return; }
+  if (n === st.n) return;
+  note = ''; setN(n, SLIDE_MS); renderPicker(); warm();
   sfx.uiTap();
+});
+press(levels, e => {
+  const b = (e.target as HTMLElement).closest('button'); if (!b || !isLevel(b.dataset.lv) || b.dataset.lv === st.lv) return;
+  st.lv = b.dataset.lv; try { localStorage.setItem(LS.lv, st.lv); } catch {}
+  note = '';
+  if (!shapeOk(st.lv, st.n)) { setN(fallbackN(st.lv, st.n), SLIDE_MS); flashNote(`${LEVEL_NAME[st.lv]} uses up to ${st.n} numbers, so the board is now a ${SHAPE[st.n]}`); }
+  else renderPicker();
+  warm(); sfx.uiTap();
 });
 function toMenu() {
   cancelTimers(); st.run++; st.phase = 'menu'; st.running = false; fromGame = false; pending = null;
   setMode('menu'); show('play'); setStreak(0, 0);
-  renderPicker(); showPuzzle(generate(st.n), false); layout(st.n, 0);
+  if (!shapeOk(st.lv, st.n)) st.n = fallbackN(st.lv, st.n);
+  note = ''; renderPicker(); showShape(); layout(st.n, 0); warm();
 }
 press($('mStart'), () => { startRound(); sfx.uiTap(); });
-press($('mBoards'), () => { fromGame = false; showBoards(st.n); sfx.uiTap(); });
+press($('mBoards'), () => { fromGame = false; showBoards(st.n, st.lv); sfx.uiTap(); });
 const lab = initLab(press, () => toMenu());
 press($('mLab'), () => { show('lab'); lab.open(); sfx.uiTap(); });
 press($('gQuit'), quit);
 
 { const n = Number(localStorage.getItem(LS.n)); if ((NS as readonly number[]).includes(n)) st.n = n; }
-boardN = st.n; void boardN;
+/** Level: ?level= (testing, not saved) > saved choice > Easy for new players. A returning v0.2 player (saved shape or
+ * scores, no level yet) starts on Hard, where their old scores now live. */
+{
+  const q = Q.get('level'), saved = localStorage.getItem(LS.lv);
+  st.lv = isLevel(q) ? q : isLevel(saved) ? saved : (localStorage.getItem(LS.n) || localStorage.getItem(LS.boardV1)) ? 'hard' : 'easy';
+}
+boardN = st.n; boardLv = st.lv;
 toMenu();
 document.fonts?.ready.then(() => layout(shownN || st.n, 0));

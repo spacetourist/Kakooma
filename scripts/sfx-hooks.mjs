@@ -24,7 +24,7 @@ const ans = () => kk(() => window.__kk.puzzle.nums.indexOf(window.__kk.puzzle.an
 const wrong = () => kk(() => { const p = window.__kk.puzzle, a = p.nums.indexOf(p.answer); return a === 0 ? 1 : 0; });
 const waitPlay = () => page.waitForFunction(() => window.__kk.phase === 'play', null, { timeout: 12000 });
 const fails = [], ok = []; const check = (c, m) => (c ? ok : fails).push((c ? 'ok   ' : 'FAIL ') + m);
-await page.goto(BASE + '?round=14&teach=quick'); await page.waitForFunction(() => document.fonts.status === 'loaded');
+await page.goto(BASE + '?level=hard&round=14&teach=quick'); await page.waitForFunction(() => document.fonts.status === 'loaded');
 await kk(() => { localStorage.clear(); localStorage.setItem('kk.board.v1', JSON.stringify([{ name: 'AAA', n: 4, score: 1, streak: 1, avg: 900, miss: 0, at: 1 }])); }); await page.reload(); await page.waitForFunction(() => window.__kk);
 await kk(() => { window.__sfxLog = []; window.__T = performance.now(); });
 const since = () => kk(() => window.__sfxLog.map(([n, a, t]) => [n + (a.length ? `(${a.join(',')})` : ''), Math.round(t - window.__T)]));

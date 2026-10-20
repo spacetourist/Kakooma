@@ -1,4 +1,4 @@
-// e2e v0.2.1+ (default expects v0.2.3.2, shots v0232-*; EXPECT_VER / SHOT_TAG override): node scripts/e2e-v021.mjs [baseUrl]. GD review fixes: ~3 s solve, full-size ten-frames in rows, hoppers leave + keep colour, wrong caption in the sum strip, Bond Lab slider/ten-frames/quiz label. Plus all v0.2 checks. Teaching solve stages, timer pause, skip, chip replay, wrong caption, Bond Lab, reduced motion, FPS @4x CPU.
+// e2e v0.2.1+ (default expects v0.3, shots v030r021-*; boots on ?level=hard; EXPECT_VER / SHOT_TAG override): node scripts/e2e-v021.mjs [baseUrl]. GD review fixes: ~3 s solve, full-size ten-frames in rows, hoppers leave + keep colour, wrong caption in the sum strip, Bond Lab slider/ten-frames/quiz label. Plus all v0.2 checks. Teaching solve stages, timer pause, skip, chip replay, wrong caption, Bond Lab, reduced motion, FPS @4x CPU.
 import { createServer } from 'http';
 import { readFileSync, existsSync, statSync, mkdirSync, writeFileSync } from 'fs';
 import { join, extname } from 'path';
@@ -22,7 +22,7 @@ const errs = [], fails = [], log = [], perf = {};
 const watch = pg => { pg.on('pageerror', e => errs.push(e.message)); pg.on('console', m => { if (m.type() === 'error') errs.push(m.text()); }); };
 watch(page);
 const check = (c, msg) => { (c ? log : fails).push((c ? 'ok   ' : 'FAIL ') + msg); };
-const TAG = process.env.SHOT_TAG || 'v0232', VER = process.env.EXPECT_VER || 'v0.2.3.2';
+const TAG = process.env.SHOT_TAG || 'v030r021', VER = process.env.EXPECT_VER || 'v0.3';
 const shot = n => page.screenshot({ path: `${SHOTS}${TAG}-${n}.png` });
 const kk = (f, a) => page.evaluate(f, a);
 const wait = ms => page.waitForTimeout(ms);
@@ -46,7 +46,7 @@ async function boot(url) {
   await page.goto(url); await kk(() => localStorage.clear()); await page.reload();
   await page.waitForFunction(() => document.fonts.status === 'loaded');
 }
-await boot(BASE + '?round=60');
+await boot(BASE + '?level=hard&round=60');
 check((await page.textContent('#verLabel')) === VER, 'menu shows ' + await page.textContent('#verLabel'));
 check(await page.isVisible('#mLab'), 'menu has Bond Lab button');
 const mfoot = await kk(() => document.getElementById('mBoards').getBoundingClientRect().bottom);
@@ -296,7 +296,7 @@ check(f1.avgFps >= 55 && f2.avgFps >= 55, `FPS @4x CPU: ${JSON.stringify(perf)}`
 // ---------- bond-stage timeline (every 300 ms) + sound-hook timing, 7 + 12 ----------
 async function lessonRun(onTap) {
   await page.close(); page = await browser.newPage(ctxOpts); watch(page);
-  await boot(BASE + '?round=60&teach=full'); await tapEl('#picker [data-n="5"]'); await wait(300);
+  await boot(BASE + '?level=hard&round=60&teach=full'); await tapEl('#picker [data-n="5"]'); await wait(300);
   await queue([P([7, 9, 12, 19, 4], 7, 12)]); await tapEl('#mStart'); await waitPlay(); await wait(400);
   await kk(() => {
     window.__t0 = 0; window.__sfxLog = []; window.__stg = {};
@@ -345,7 +345,7 @@ async function lessonRun(onTap) {
 
 // ---------- reduced motion ----------
 await page.close(); page = await browser.newPage({ ...ctxOpts, reducedMotion: 'reduce' }); watch(page);
-await boot(BASE + '?round=60');
+await boot(BASE + '?level=hard&round=60');
 await queue([P([7, 9, 12, 19, 4], 7, 12)]);
 await tapEl('#mStart'); await waitPlay(); await wait(300);
 const rs = Date.now(); await tapTile(await answerIdx()); await wait(60);

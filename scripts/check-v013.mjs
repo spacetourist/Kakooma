@@ -6,7 +6,7 @@ const page = await b.newPage({ viewport: { width: 412, height: 915 }, deviceScal
 const errs = []; page.on('pageerror', e => errs.push(e.message));
 const kk = f => page.evaluate(f), wait = ms => page.waitForTimeout(ms);
 const tap = async sel => { const bb = await page.locator(sel).first().boundingBox(); await page.touchscreen.tap(bb.x + bb.width / 2, bb.y + bb.height / 2); };
-await page.goto(BASE + '?teach=quick&round=120'); await kk(() => localStorage.clear()); await page.reload();
+await page.goto(BASE + '?level=hard&teach=quick&round=120'); await kk(() => localStorage.clear()); await page.reload();
 console.log('version', await page.textContent('#verLabel'));
 let ok = true;
 for (const n of [4, 7]) {

@@ -39,7 +39,9 @@
     <div class="sum game-only" id="sum" aria-live="polite"></div>
 
     <div class="below menu-only">
-      <div class="lbl">Board</div>
+      <div class="lbl">Level</div>
+      <div class="levels" id="levels" role="radiogroup" aria-label="Level: biggest number on the board"></div>
+      <div class="lbl lbl2">Board</div>
       <div class="picker" id="picker" role="radiogroup" aria-label="Board shape"></div>
       <div class="best" id="bestLine"></div>
       <div class="foot">
@@ -121,6 +123,7 @@
 
   <section class="screen panel hidden" id="boards">
     <h2 class="title">Leaderboard</h2>
+    <div class="levels sm" id="bLevels" role="radiogroup" aria-label="Level"></div>
     <div class="picker tabs" id="bTabs" role="tablist" aria-label="Board shape"></div>
     <div class="sub" id="bHead"></div>
     <div class="rows" id="bRows"></div>
