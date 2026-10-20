@@ -151,10 +151,14 @@ export function teach(ctx: TeachCtx, a: number, b: number): TeachRun {
           (window as any).__kkCount.push([shown, Math.round(now)]);
           sfx.count(k); // zero-based running total (the dot that makes 10 is count(9)), on the frame this dot lands
           if (!reduced) anim(ans, [{ transform: 'scale(1)' }, { transform: 'scale(1.12)', offset: 0.35 }, { transform: 'scale(1)' }], { duration: Math.min(220, tm.every + 40), easing: 'ease-out' });
+          // keep the stagger relative to the frame the dot was actually counted on (a dropped/stalled frame must not
+          // pull partPop onto the same frame as the last count())
+          if (shown === plan.S) evAt[0] = Math.max(evAt[0], now + POP_AFTER);
+          if (shown === plan.c) { evAt[1] = Math.max(evAt[1], now + POP_AFTER); evAt[2] = Math.max(evAt[2], evAt[1] + GREEN_AFTER); }
         }
         // group events on their own frames (label + partPop together; green + bond together)
         if (ev < 3 && now >= evAt[ev] && (ev === 0 ? shown >= plan.S : shown >= plan.c)) {
-          if (ev < 2) { fadeIn(labels[ev], 200, 0, 4); sfx.partPop(ev); }
+          if (ev < 2) { fadeIn(labels[ev], 200, 0, 4); sfx.partPop(ev); if (ev === 1) evAt[2] = Math.max(evAt[2], now + GREEN_AFTER); }
           else {
             ans.classList.remove('counting', 'c1'); sfx.bond(); ctx.onStage?.('counted');
             if (!reduced) anim(ans, [{ transform: 'scale(1)' }, { transform: 'scale(1.12)', offset: 0.35 }, { transform: 'scale(1)' }], { duration: 260, easing: 'ease-out' });
