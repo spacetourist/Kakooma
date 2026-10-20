@@ -160,7 +160,7 @@ export function teach(ctx: TeachCtx, a: number, b: number): TeachRun {
         if (ev < 3 && now >= evAt[ev] && (ev === 0 ? shown >= plan.S : shown >= plan.c)) {
           if (ev < 2) { fadeIn(labels[ev], 200, 0, 4); sfx.partPop(ev); if (ev === 1) evAt[2] = Math.max(evAt[2], now + GREEN_AFTER); }
           else {
-            ans.classList.remove('counting', 'c1'); sfx.bond(); ctx.onStage?.('counted');
+            ans.classList.remove('counting', 'c1'); sfx.makeTen(); ctx.onStage?.('counted');
             if (!reduced) anim(ans, [{ transform: 'scale(1)' }, { transform: 'scale(1.12)', offset: 0.35 }, { transform: 'scale(1)' }], { duration: 260, easing: 'ease-out' });
           }
           ev++;
