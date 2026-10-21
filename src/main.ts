@@ -2,7 +2,7 @@ import './style.css';
 import { generate, sumKey, type Puzzle, type Level, LEVELS, CAP, LEVEL_NAME, isLevel, supports } from './puzzle';
 import { teach, type TeachRun } from './teach';
 import { haptic, ripple, reducedMotion } from './fx';
-import { sfx } from './sfx';
+import { sfx, initAudio, isMuted, setMuted, whenRunning } from './sfx';
 import { initLab } from './lab';
 import { avgSolve, secLabel } from './stats';
 
@@ -470,6 +470,12 @@ function toMenu() {
   if (!shapeOk(st.lv, st.n)) st.n = fallbackN(st.lv, st.n);
   note = ''; renderPicker(); showShape(); layout(st.n, 0); warm();
 }
+// v0.3.4 (GD): sound toggle on the menu, left of Blaze. Muting stops anything playing or queued and silences every later
+// hook; the tap plays uiTap only when it turns sound back on. Saved in localStorage ('kk.mute').
+const muteBtn = $('mMute');
+function drawMute() { const m = isMuted(); muteBtn.classList.toggle('off', m); muteBtn.setAttribute('aria-pressed', String(m)); muteBtn.setAttribute('aria-label', m ? 'Sound off' : 'Sound on'); }
+press(muteBtn, () => { const m = !isMuted(); setMuted(m); drawMute(); if (!m) whenRunning(() => sfx.uiTap()); });
+drawMute(); initAudio();
 press($('mStart'), () => { startRound(); sfx.uiTap(); });
 press($('mBoards'), () => { fromGame = false; showBoards(st.n, st.lv); sfx.uiTap(); });
 const lab = initLab(press, () => toMenu());

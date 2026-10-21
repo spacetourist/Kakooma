@@ -272,3 +272,13 @@ button.chip { cursor: pointer; touch-action: manipulation; }
 .opt { height: 68px; border-radius: var(--r-pill); background: var(--card); box-shadow: var(--shadow); font: 700 32px/1 var(--f-display); transition: background-color .12s, color .12s, box-shadow .12s; }
 .opt.ok { background: var(--green); color: #fff; } .opt.bad { box-shadow: 0 0 0 3px var(--coral), var(--shadow); color: var(--coral); }
 .opts .btn { height: 52px; }
+
+/* v0.3.4 (GD): sound toggle, a 40 px round white button left of Blaze on the menu; muted = speaker crossed out in grey */
+.mute { width: 40px; height: 40px; flex: 0 0 40px; margin: 56px 6px 0 auto; padding: 0; border: 0; border-radius: 50%; background: var(--card); box-shadow: var(--shadow); display: grid; place-items: center; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.mute svg { width: 22px; height: 22px; overflow: visible; }
+.mute .spk { fill: var(--ink); }
+.mute .wave, .mute .x { fill: none; stroke: var(--ink); stroke-width: 2; stroke-linecap: round; }
+.mute .x { display: none; }
+.mute.off .spk { fill: var(--muted); } .mute.off .wave { display: none; } .mute.off .x { display: inline; stroke: var(--muted); }
+.mute:active { transform: scale(.94); }
+@media (max-height: 760px) { .mute { margin-top: 40px; } }
