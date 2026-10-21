@@ -15,11 +15,11 @@ const browser = await chromium.launch({ executablePath: '/usr/bin/google-chrome'
 const errs = [], fails = [], log = [];
 const check = (c, m) => (c ? log : fails).push((c ? 'ok   ' : 'FAIL ') + m);
 let page; const reqs = [];
-async function open(q, reduced = false) {
+async function open(q, reduced = false, speedy = 0) { // speedy: whoa threshold for this page (0 = off, so the scripted fast taps don't trigger it; null = the game's 2 s)
   if (page) await page.close();
   page = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, reducedMotion: reduced ? 'reduce' : 'no-preference' });
   page.on('pageerror', e => errs.push(e.message)); page.on('console', m => { if (m.type() === 'error') errs.push(m.text()); });
-  page.on('request', r => reqs.push(r.url())); await page.addInitScript(() => { window.__sfxLog = []; });
+  page.on('request', r => reqs.push(r.url())); await page.addInitScript(sp => { window.__sfxLog = []; if (sp != null) window.__kkSpeedyMs = sp; }, speedy);
   await page.goto(BASE + q); await page.waitForFunction(() => document.fonts.status === 'loaded'); await page.waitForTimeout(400);
 }
 const kk = (f, a) => page.evaluate(f, a), wait = ms => page.waitForTimeout(ms);
@@ -36,11 +36,11 @@ const waitCheer = () => page.waitForFunction(() => window.__kkBlaze.at(-1)?.[0] 
 
 // ---------- A: lazy preload ----------
 await open('?round=90&level=medium&teach=quick');
-await page.waitForFunction(() => performance.getEntriesByType('resource').filter(e => /\/blaze\/\w+\.webp/.test(e.name)).length >= 5, null, { timeout: 8000 });
+await page.waitForFunction(() => performance.getEntriesByType('resource').filter(e => /\/blaze\/\w+\.webp/.test(e.name)).length >= 6, null, { timeout: 8000 });
 const pre = await kk(() => { const fcp = performance.getEntriesByName('first-contentful-paint')[0]?.startTime ?? 0, nav = performance.getEntriesByType('navigation')[0];
   return { fcp, load: nav.loadEventEnd, poses: performance.getEntriesByType('resource').filter(e => /\/blaze\//.test(e.name)).map(e => ({ n: e.name.split('/').pop(), start: Math.round(e.startTime), kb: +(e.transferSize / 1024 || e.decodedBodySize / 1024).toFixed(1) })) }; });
-check(pre.poses.length === 5 && pre.poses.every(p => p.start >= pre.fcp && p.start >= pre.load), `poses preload after first paint + load: fcp ${Math.round(pre.fcp)} load ${Math.round(pre.load)} ${JSON.stringify(pre.poses)}`);
-check(!reqs.some(u => /whoa/.test(u)), 'whoa not requested (slot kept, asset off)');
+check(pre.poses.length === 6 && pre.poses.every(p => p.start >= pre.fcp && p.start >= pre.load), `poses preload after first paint + load: fcp ${Math.round(pre.fcp)} load ${Math.round(pre.load)} ${JSON.stringify(pre.poses)}`);
+check(reqs.some(u => /whoa\.webp/.test(u)), 'whoa (v2) preloaded with the others');
 
 // ---------- B: wrong (oops), budget, comeback (thumbs), milestones ----------
 await tapEl('#mStart'); await waitPlay(); await wait(300);
@@ -83,12 +83,12 @@ check(b.current !== 'think', `next tap cancels think (${b.current})`);
 // sfx.blaze on the swap frame
 const sx = await kk(() => ({ s: window.__sfxLog.filter(e => e[0] === 'blaze').map(e => [e[3], Math.round(e[2])]), b: window.__kkBlaze }));
 check(sx.s.length === sx.b.length && sx.s.every((e, i) => e[0] === sx.b[i][0] && Math.abs(e[1] - sx.b[i][1]) <= 1), `sfx.blaze(pose) fired once per swap, same frame (${sx.s.length} calls: ${sx.s.map(e => e[0]).join(',')})`);
-check(!sx.s.some(e => e[0] === 'whoa'), 'whoa (speedy) never fires while disabled');
+check(!sx.s.some(e => e[0] === 'whoa'), 'no whoa while the speedy threshold is off for this page');
 await tapEl('#gQuit'); await wait(200);
 
 // ---------- input path + FPS @4x during a milestone ----------
 await open('?round=60&level=medium&teach=quick');
-await page.waitForFunction(() => window.__kkReact && performance.getEntriesByType('resource').filter(e => /blaze\/\w+\.webp/.test(e.name)).length >= 5);
+await page.waitForFunction(() => window.__kkReact && performance.getEntriesByType('resource').filter(e => /blaze\/\w+\.webp/.test(e.name)).length >= 6);
 await wait(300);
 await tapEl('#mStart'); await waitPlay(); await wait(300); await right(); await wait(900); await right(); await wait(900); await waitPlay(); await wait(300);
 const cdp = await page.context().newCDPSession(page); await cdp.send('Emulation.setCPUThrottlingRate', { rate: 4 });
@@ -103,7 +103,7 @@ check(1000 / avg >= 55, `FPS @4x CPU through a cheer + sparks: ${(1000 / avg).to
 
 // ---------- clap at the green flash at 10 (full lesson) ----------
 await open('?round=60&level=medium&teach=full');
-await page.waitForFunction(() => window.__kkReact && performance.getEntriesByType('resource').filter(e => /blaze\/\w+\.webp/.test(e.name)).length >= 5);
+await page.waitForFunction(() => window.__kkReact && performance.getEntriesByType('resource').filter(e => /blaze\/\w+\.webp/.test(e.name)).length >= 6);
 await kk(() => { window.__kkNext = [{ nums: [7, 9, 12, 19, 4], a: 7, b: 12, answer: 19 }]; });
 await tapEl('#mStart'); await waitPlay(); await wait(300);
 await kk(() => { window.__clapAt = null; const f = () => { const c = window.__kkBlaze.find(x => x[0] === 'clap'); if (c) window.__clapAt = { count: window.__kkCount.length, last: window.__kkCount.at(-1)[0] }; else requestAnimationFrame(f); }; requestAnimationFrame(f); });
@@ -116,7 +116,7 @@ await wait(4000);
 
 // ---------- reduced motion: swap only ----------
 await open('?round=60&level=medium&teach=quick', true);
-await page.waitForFunction(() => window.__kkReact && performance.getEntriesByType('resource').filter(e => /blaze\/\w+\.webp/.test(e.name)).length >= 5);
+await page.waitForFunction(() => window.__kkReact && performance.getEntriesByType('resource').filter(e => /blaze\/\w+\.webp/.test(e.name)).length >= 6);
 await tapEl('#mStart'); await waitPlay(); await wait(300);
 const rm = await kk(() => new Promise(res => { window.__kkReact('cheer', { sparks: 7 }); requestAnimationFrame(() => res({ waapi: document.getElementById('blazeBody').getAnimations().filter(a => !(a instanceof CSSAnimation)).length, sparks: document.querySelectorAll('#blaze .spark').length, cur: window.__kkBlazeState().current })); }));
 check(rm.cur === 'cheer' && rm.waapi === 0 && rm.sparks === 0, `reduced motion: pose swaps, no squash/stretch, no sparks ${JSON.stringify(rm)}`);
@@ -127,10 +127,25 @@ for (const p of ['cheer', 'thumbs', 'oops', 'clap', 'think', 'whoa']) {
   await open(`?round=60&level=medium&teach=quick&blaze=${p}`);
   await tapEl('#mStart'); await waitPlay(); await wait(1600);
   const c = (await B()).current;
-  check(p === 'whoa' ? c === null : c === p, `?blaze=${p}: ${p === 'whoa' ? 'no asset yet, normal Blaze, no errors' : 'held through play'} (${c})`);
-  await crop(`force-${p}`); if (p !== 'whoa') await shot(`force-${p}`);
+  check(c === p, `?blaze=${p}: held through play (${c})`);
+  await crop(`force-${p}`); await shot(`force-${p}`);
   await tapEl('#gQuit'); await wait(100);
 }
+// ---------- whoa (v2): speedy solve under 2 s, once a round, within the budget ----------
+await open('?round=60&level=medium&teach=quick', false, null);
+await page.waitForFunction(() => window.__kkReact && performance.getEntriesByType('resource').filter(e => /blaze\/\w+\.webp/.test(e.name)).length >= 6);
+await tapEl('#mStart'); await waitPlay(); await wait(500);
+await right(); await wait(200); let w = await B();
+check(w.log[0] === 'whoa' && w.current === 'whoa', `speedy first solve (${await kk(() => Math.round(window.__kk.solve[0]))} ms) -> whoa ${w.log}`);
+await wait(120); await shot('whoa'); await crop('whoa-crop');
+for (let k = 0; k < 4; k++) { await wait(1100); await right(); }
+await wait(300); w = await B();
+check(w.log.filter(x => x === 'whoa').length === 1, `whoa at most once a round (${w.log})`);
+await tapEl('#gQuit'); await wait(200);
+await open('?round=60&level=medium&teach=quick', false, null);
+await page.waitForFunction(() => window.__kkReact && performance.getEntriesByType('resource').filter(e => /blaze\/\w+\.webp/.test(e.name)).length >= 6);
+await tapEl('#mStart'); await waitPlay(); await wait(2300); await right(); await wait(200);
+check(!(await B()).log.includes('whoa'), 'a solve slower than 2 s: no whoa');
 check(errs.length === 0, 'no console errors ' + JSON.stringify(errs));
 console.log(log.join('\n')); if (fails.length) console.log(fails.join('\n'));
 console.log(fails.length ? `${fails.length} FAILED` : 'ALL V035 BLAZE CHECKS PASSED');

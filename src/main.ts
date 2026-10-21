@@ -408,7 +408,7 @@ function onTap(i: number, now: number) {
     if (!FORCE) requestAnimationFrame(() => {
       if (hadMistake) bz.react('thumbs');
       else if (cheerNow && !cheerLater) { if (!bz.react('cheer', { sparks: SPARKS[sk] })) blazeHop(); } // no shower (reduced motion): now
-      else if (WHOA_ON && !bzs.whoaUsed && solved.ms < SPEEDY_MS && special('whoa')) bzs.whoaUsed = true;
+      else if (WHOA_ON && !bzs.whoaUsed && solved.ms < ((window as any).__kkSpeedyMs ?? SPEEDY_MS) && special('whoa')) bzs.whoaUsed = true;
     });
     const milestone = st.streak === 5 || st.streak === 10 || st.streak === 20;
     if (newBest) cueNewBest();

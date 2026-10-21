@@ -10,9 +10,11 @@ import { reducedMotion } from './fx';
 
 export type Pose = 'cheer' | 'thumbs' | 'oops' | 'clap' | 'think' | 'whoa';
 export const POSES: Pose[] = ['cheer', 'thumbs', 'oops', 'clap', 'think', 'whoa'];
-/** whoa: slot kept, asset + trigger off until GD's redo is approved (set the file name and WHOA_ON to enable) */
-const FILES: Record<Pose, string | null> = { cheer: 'cheer.webp', thumbs: 'thumbs.webp', oops: 'oops.webp', clap: 'clap.webp', think: 'think.webp', whoa: null };
-export const WHOA_ON = false;
+/** GD's v2 poses: 634×581 masters with exactly blaze.png's framing (no top strip), shipped as 172×158 WebP (2x the
+ *  86 px display). They sit in the same box as blaze.png with no scaling or offset. */
+const FILES: Record<Pose, string | null> = { cheer: 'cheer.webp', thumbs: 'thumbs.webp', oops: 'oops.webp', clap: 'clap.webp', think: 'think.webp', whoa: 'whoa.webp' };
+/** whoa (v2): speedy solve, the board answered in under 2 s, at most once a round, within the 1-in-3 budget */
+export const WHOA_ON = true;
 const DIR = import.meta.env.BASE_URL + 'assets/img/blaze/';
 export const REVERT_MS = 900;
 
