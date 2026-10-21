@@ -48,7 +48,7 @@ function later(fn: () => void, ms: number) {
   const h = window.setTimeout(() => { st.timers.delete(h); if (st.run === run) fn(); }, ms);
   st.timers.add(h);
 }
-function cancelTimers() { for (const h of st.timers) clearTimeout(h); st.timers.clear(); st.teach?.skip(); idleStop(); pendingStreak = 0; }
+function cancelTimers() { for (const h of st.timers) clearTimeout(h); st.timers.clear(); st.teach?.skip(); idleStop(); pendingStreak = 0; pendingCheer = 0; }
 const esc = (s: string) => s.replace(/[&<>"']/g, c => `&#${c.charCodeAt(0)};`);
 
 // ---------- version ----------
@@ -125,8 +125,13 @@ const tier = (s: number) => (s >= 20 ? 3 : s >= 10 ? 2 : s >= 5 ? 1 : 0);
  *  first burst (in the lesson, or on the held board); correct() stays on the tap. Levels with no shower (x20, or
  *  reduced motion) keep it here, after the state change. A pending sound is flushed at the next board if the shower
  *  never ran (lesson skipped) and dropped on quit / round end. */
-let pendingStreak = 0;
-function flushStreak() { if (!pendingStreak) return; const n = pendingStreak; pendingStreak = 0; sfx.streak(n); }
+let pendingStreak = 0, pendingCheer = 0; // pendingCheer: spark count of a deferred milestone cheer (0 = none)
+/** the shower's first burst (or the next board, if the shower never ran): streak(n) and, on the branch, Blaze's cheer
+ *  swap + its sfx.blaze('cheer') in the same tick, so picture and sound stay together */
+function flushStreak() {
+  if (pendingStreak) { const n = pendingStreak; pendingStreak = 0; sfx.streak(n); }
+  if (pendingCheer) { const k = pendingCheer; pendingCheer = 0; if (!bz.react('cheer', { sparks: k })) blazeHop(); }
+}
 function setStreak(s: number, prev: number, hop = true, sound = true) {
   pill.textContent = `x${s}`;
   const t = tier(s); blaze.dataset.tier = String(t);
@@ -396,11 +401,13 @@ function onTap(i: number, now: number) {
     bzs.solves++;
     const cheerNow = !FORCE && !hadMistake && MILESTONES.includes(st.streak), sk = st.streak;
     const newBest = st.prevBest > 0 && st.score === st.prevBest + 1, big = newBest || [3, 5, 10].includes(st.streak);
+    // AE: a milestone that gets the star shower moves its cheer (pose + blaze('cheer')) onto the shower's first burst, with streak(n)
+    const cheerLater = cheerNow && big && !reducedMotion(); if (cheerLater) pendingCheer = SPARKS[sk];
     scoreTxt.textContent = String(st.score); setStreak(st.streak, prev, !cheerNow, !(big && !reducedMotion()));
     sfx.correct();
     if (!FORCE) requestAnimationFrame(() => {
       if (hadMistake) bz.react('thumbs');
-      else if (cheerNow) { if (!bz.react('cheer', { sparks: SPARKS[sk] })) blazeHop(); }
+      else if (cheerNow && !cheerLater) { if (!bz.react('cheer', { sparks: SPARKS[sk] })) blazeHop(); } // no shower (reduced motion): now
       else if (WHOA_ON && !bzs.whoaUsed && solved.ms < SPEEDY_MS && special('whoa')) bzs.whoaUsed = true;
     });
     const milestone = st.streak === 5 || st.streak === 10 || st.streak === 20;

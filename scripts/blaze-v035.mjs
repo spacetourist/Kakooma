@@ -31,6 +31,8 @@ const right = async () => { await waitPlay(); const i = await kk(() => window.__
 const wrong = async () => { await waitPlay(); const i = await kk(() => { const p = window.__kk.puzzle; return p.nums.findIndex((v, j) => v !== p.answer && !window.__kk.badTiles.has(j)); }); await tapEl(`.tile[data-i="${i}"]`); };
 const B = () => kk(() => ({ log: window.__kkBlaze.map(x => x[0]), ...window.__kkBlazeState(), sparks: document.querySelectorAll('#blaze .spark').length, streak: window.__kk.streak, src: document.querySelector('#blazeBody img.pose')?.getAttribute('src'), hidden: document.querySelector('#blazeBody img.pose')?.hidden, baseVis: document.querySelector('#blazeBody img').style.visibility }));
 const last = async () => (await B()).log.at(-1);
+// milestone cheers now swap in on the star shower's first burst (with streak(n)), ~0.5 s after the tap on a held board
+const waitCheer = () => page.waitForFunction(() => window.__kkBlaze.at(-1)?.[0] === 'cheer' && document.querySelectorAll('#blaze .spark').length > 0, null, { timeout: 3000, polling: 10 }).then(() => wait(60));
 
 // ---------- A: lazy preload ----------
 await open('?round=90&level=medium&teach=quick');
@@ -56,13 +58,13 @@ await wrong(); await wait(150); b = await B();
 check(b.log.length === n0 && b.log.at(-1) === 'thumbs', `wrong #2 (off turn) tilts; wrong #3 (on turn) inside the 1-in-3 budget also just tilts ${JSON.stringify(b)}`);
 await right(); await wait(200); check(await last() === 'thumbs', 'comeback always plays (exempt from the budget)');
 await wait(800); await right(); await wait(150); check((await B()).log.length === n0 + 1, 'streak 2: normal (no special)');
-await right(); await wait(120); b = await B();
+await right(); await waitCheer(); b = await B();
 check(b.log.at(-1) === 'cheer' && b.streak === 3 && b.sparks === 4, `streak 3: cheer + 4 sparks ${JSON.stringify(b)}`);
 await wait(100); await shot('cheer-3-sparks'); await crop('cheer-3-crop');
 await wait(900); await wrong(); await wait(150); await wrong(); await wait(150); b = await B();
 check(b.log.at(-1) === 'oops', `budget open again (4 solves since the last special): next on-turn wrong pick -> oops ${b.log}`);
 for (let s = 1; s <= 10; s++) {
-  await wait(900); await right(); await wait(120); b = await B();
+  await wait(900); await right(); if (s === 5 || s === 10) await waitCheer(); else await wait(120); b = await B();
   if (s === 1) check(b.log.at(-1) === 'thumbs', 'comeback after the oops');
   if (s === 5) check(b.log.at(-1) === 'cheer' && b.sparks === 5, `streak 5: cheer + 5 sparks (${b.sparks})`);
   if (s === 10) { check(b.log.at(-1) === 'cheer' && b.sparks === 7, `streak 10: cheer + 7 sparks (${b.sparks})`); await wait(100); await shot('cheer-10-sparks'); await crop('cheer-10-crop'); }
