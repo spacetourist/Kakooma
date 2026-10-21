@@ -75,13 +75,15 @@ export function confetti(layer: HTMLElement, x: number, y: number): void {
 export const SHOWER = { bursts: 6, every: 200, ms: 1200 };
 /** Big moments (streak 3/5/10, a new #1): a 1.2 s shower of 6 bursts 200 ms apart along the top edge, x spread evenly
  *  over 0.1-0.9 with a little jitter, 25 pieces each, stars weighted to 50 %. */
-export function shower(): void {
-  if (reducedMotion()) return;
+export function shower(onFirst?: () => void): void {
+  if (reducedMotion()) { onFirst?.(); return; }
   load().then(c => {
-    if (!c) return;
+    if (!c) { onFirst?.(); return; }
     const shapes = mix(c.star, 3, 2, 5), n = SHOWER.bursts;
     const xs = Array.from({ length: n }, (_, k) => 0.1 + 0.8 * (k + 0.5) / n + (Math.random() - 0.5) * 0.05).sort(() => Math.random() - 0.5);
-    xs.forEach((x, k) => setTimeout(() => fireCapped(c, 'shower', { colors: CONFETTI_COLOURS, shapes, particleCount: 25, angle: 270, spread: 70, startVelocity: 18, gravity: 0.6, ticks: 220, scalar: 1.1,
-      origin: { x: Math.min(0.9, Math.max(0.1, x)), y: -0.02 } }), k * SHOWER.every));
+    // v0.3.5.2: onFirst (the deferred streak(n)) runs in the same tick as the first burst fires
+    const burst = (x: number, k: number) => { if (!k) onFirst?.(); fireCapped(c, 'shower', { colors: CONFETTI_COLOURS, shapes, particleCount: 25, angle: 270, spread: 70, startVelocity: 18, gravity: 0.6, ticks: 220, scalar: 1.1,
+      origin: { x: Math.min(0.9, Math.max(0.1, x)), y: -0.02 } }); };
+    xs.forEach((x, k) => { if (!k) burst(x, 0); else setTimeout(() => burst(x, k), k * SHOWER.every); });
   });
 }

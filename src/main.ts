@@ -48,7 +48,7 @@ function later(fn: () => void, ms: number) {
   const h = window.setTimeout(() => { st.timers.delete(h); if (st.run === run) fn(); }, ms);
   st.timers.add(h);
 }
-function cancelTimers() { for (const h of st.timers) clearTimeout(h); st.timers.clear(); st.teach?.skip(); idleStop(); }
+function cancelTimers() { for (const h of st.timers) clearTimeout(h); st.timers.clear(); st.teach?.skip(); idleStop(); pendingStreak = 0; }
 const esc = (s: string) => s.replace(/[&<>"']/g, c => `&#${c.charCodeAt(0)};`);
 
 // ---------- version ----------
@@ -121,11 +121,17 @@ function showPuzzle(p: Puzzle, pop: boolean) {
 // ---------- Blaze (streak) ----------
 const blaze = $('blaze'), blazeBody = $('blazeBody'), pill = $('streakPill');
 const tier = (s: number) => (s >= 20 ? 3 : s >= 10 ? 2 : s >= 5 ? 1 : 0);
-function setStreak(s: number, prev: number, hop = true) {
+/** v0.3.5.2 (AE): when a streak level gets the star shower, its streak(n) sound moves onto the frame of the shower's
+ *  first burst (in the lesson, or on the held board); correct() stays on the tap. Levels with no shower (x20, or
+ *  reduced motion) keep it here, after the state change. A pending sound is flushed at the next board if the shower
+ *  never ran (lesson skipped) and dropped on quit / round end. */
+let pendingStreak = 0;
+function flushStreak() { if (!pendingStreak) return; const n = pendingStreak; pendingStreak = 0; sfx.streak(n); }
+function setStreak(s: number, prev: number, hop = true, sound = true) {
   pill.textContent = `x${s}`;
   const t = tier(s); blaze.dataset.tier = String(t);
   if (t > tier(prev) && hop) blazeBody.animate([{ transform: 'translateY(0)' }, { transform: 'translateY(-14px)', offset: 0.4 }, { transform: 'translateY(0)' }], { duration: 380, easing: 'ease-out' });
-  if (t > tier(prev)) sfx.streak([0, 5, 10, 20][t]); // Blaze grows (called after the streak state changed)
+  if (t > tier(prev)) { if (sound) sfx.streak([0, 5, 10, 20][t]); else pendingStreak = [0, 5, 10, 20][t]; } // Blaze grows (after the streak state changed)
 }
 /** Wrong tap: Blaze tilts his head; if a streak broke he also shrinks and sighs (eyes close). */
 function blazeWrong(sighToo: boolean) {
@@ -289,7 +295,7 @@ function connectBeat(s: Solved, iC: number, big: boolean, then: () => void, onSk
       later(() => { if (!done) tiles[k].classList.add('add', part ? 'cl' : 'cs'); }, C.lineAt);
     });
     sfx.link({ delay: C.lineAt / 1000 }); // once, as the lines start (no partPop in the reveal)
-    later(() => { if (done) return; showSum(s); if (big) shower(); }, C.pulseAt);
+    later(() => { if (done) return; showSum(s); if (big) shower(flushStreak); }, C.pulseAt);
     later(() => { if (!done) for (const t of tiles) t.classList.remove('cdim'); }, C.fadeAt);
     // v0.3.5.1: a shower with no lesson after it holds the solved board (lines faded, sum still up) until the shower has
     // passed its peak, so it never lands on a playable new board
@@ -313,7 +319,7 @@ function runTeach(s: Solved, iC: number, then: () => void, big = false, live = t
   requestAnimationFrame(() => {
     if (ended) return;
     real = teach({ layer: fxEl, tiles, centre: i => ({ x: cur[i].x, y: cur[i].y }), n: s.nums.length,
-      iS: s.nums.indexOf(s.a), iL: s.nums.indexOf(s.b), iC, pace: st.lv, big, onHop: blazeHop, onStage: g => { st.teachStage = g; if (g === 'clear') showSum(null); },
+      iS: s.nums.indexOf(s.a), iL: s.nums.indexOf(s.b), iC, pace: st.lv, big, onShower: flushStreak, onHop: blazeHop, onStage: g => { st.teachStage = g; if (g === 'clear') showSum(null); },
       onTen: c => { if (live && c === 10) special('clap'); } }, s.a, s.b);
     real.done.then(end);
   });
@@ -351,6 +357,7 @@ function startRound() {
   sfx.roundStart();
 }
 function nextPuzzle() {
+  flushStreak(); // only if its shower never ran (e.g. the lesson was skipped)
   st.badTiles.clear();
   showSum(null);
   // window.__kkNext: optional queue of puzzles for automated tests (deterministic stage shots); normal play never sets it
@@ -388,7 +395,8 @@ function onTap(i: number, now: number) {
     // Blaze: comeback (thumbs) and 3/5/10 milestones (cheer + flare + sparks) always play; speedy whoa is off until GD's redo
     bzs.solves++;
     const cheerNow = !FORCE && !hadMistake && MILESTONES.includes(st.streak), sk = st.streak;
-    scoreTxt.textContent = String(st.score); setStreak(st.streak, prev, !cheerNow);
+    const newBest = st.prevBest > 0 && st.score === st.prevBest + 1, big = newBest || [3, 5, 10].includes(st.streak);
+    scoreTxt.textContent = String(st.score); setStreak(st.streak, prev, !cheerNow, !(big && !reducedMotion()));
     sfx.correct();
     if (!FORCE) requestAnimationFrame(() => {
       if (hadMistake) bz.react('thumbs');
@@ -396,9 +404,8 @@ function onTap(i: number, now: number) {
       else if (WHOA_ON && !bzs.whoaUsed && solved.ms < SPEEDY_MS && special('whoa')) bzs.whoaUsed = true;
     });
     const milestone = st.streak === 5 || st.streak === 10 || st.streak === 20;
-    const newBest = st.prevBest > 0 && st.score === st.prevBest + 1;
     if (newBest) cueNewBest();
-    const full = wantsFull(milestone || newBest || hadMistake), big = newBest || [3, 5, 10].includes(st.streak);
+    const full = wantsFull(milestone || newBest || hadMistake);
     // the connect beat (~1 s), then the counting lesson or the next puzzle; a tap skips the beat (and the lesson)
     // big moments: with a lesson, the star shower plays inside it (at the bond); without one, during a longer beat
     connectBeat(solved, i, big && !full, () => full ? runTeach(solved, i, nextPuzzle, big) : nextPuzzle(), nextPuzzle);
