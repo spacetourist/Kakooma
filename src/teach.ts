@@ -16,6 +16,7 @@ export interface TeachCtx {
   onStage?: (s: string) => void; // progress hook (tests / analytics)
   pace?: Pace;                   // v0.3.2: counting speed by level (default medium)
   big?: boolean;                 // v0.3.5.1: streak 3/5/10 or a new #1: the star shower replaces the bond burst
+  onShower?: () => void;         // v0.3.5.2: called on the frame the shower's first burst fires (the deferred streak sound)
 }
 export interface TeachRun { done: Promise<void>; skip: () => void; plan: Plan }
 
@@ -258,7 +259,7 @@ export function teach(ctx: TeachCtx, a: number, b: number): TeachRun {
     ctx.onStage?.('cheer'); sfx.caption(); sfx.cheer();
     // v0.3.5.1: a normal solve gets the two inward bursts at the bond centre; a big moment (streak 3/5/10, new #1) gets
     // the star shower here instead, inside the lesson, so it has passed before the next board appears
-    if (ctx.big) shower(); else confetti(layer, W.x, (W.y + P[0].y) / 2);
+    if (ctx.big) shower(ctx.onShower); else confetti(layer, W.x, (W.y + P[0].y) / 2);
     if (!reduced) ctx.onHop();
     if (await wait(tClear - tCap)) return; // hold: 2.5 s of reading after the caption lands
     // clear: the bond fades, then teach ends and the caller restores "? + ? = ?" and shows the next board
