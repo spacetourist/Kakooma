@@ -41,6 +41,13 @@ button { font: inherit; color: inherit; border: 0; background: none; padding: 0;
 .blaze[data-tier="2"] .blaze-scale, .blaze[data-tier="3"] .blaze-scale { transform: scale(1.25); }
 .blaze-body { position: relative; width: 86px; aspect-ratio: 634 / 581; animation: bob 2s ease-in-out infinite; transform-origin: 50% 100%; }
 .blaze-body img { display: block; width: 100%; height: auto; pointer-events: none; }
+/* v0.3.5 reactions: GD's pose sits exactly over blaze.png (same box, same bottom anchor); the face overlays hide meanwhile */
+.blaze-body img.pose { position: absolute; left: 0; top: 0; }
+.blaze-body img.pose[hidden] { display: none; }
+.blaze-body[data-pose] .lid, .blaze-body[data-pose] .mouth, .blaze-body[data-pose] .shades { visibility: hidden; }
+.blaze .spark { position: absolute; left: 50%; top: 46%; width: 14px; height: 14px; margin: -7px 0 0 -7px; pointer-events: none; z-index: 2;
+  background: radial-gradient(circle, #fff6b8 0 22%, #ffbe1a 48%, #ff8a00 68%, rgba(255, 120, 0, 0) 74%);
+  clip-path: polygon(50% 0, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0 50%, 38% 38%); }
 @keyframes bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
 .lid { position: absolute; top: 48%; width: 17%; height: 20%; border-radius: 50%; background: #ff8f0a; opacity: 0; }
 .lid.l { left: 25.5%; } .lid.r { left: 53.5%; }
