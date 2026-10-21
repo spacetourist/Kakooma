@@ -20,7 +20,9 @@ const log = (name: string, args: unknown[]) => {
   const o = args.find(a => a && typeof a === 'object') as Opts;
   L.push([name, args.filter(a => typeof a === 'number'), performance.now() + (o?.delay ?? 0) * 1000]);
 };
-type Hooks = typeof kk.sfx & { link(o?: kk.PlayOpts): void };
+/** v0.3.5: Blaze's poses. ONE hook for all of them, fired on the frame the pose swaps in. */
+export type BlazePose = 'cheer' | 'thumbs' | 'oops' | 'clap' | 'think' | 'whoa';
+type Hooks = typeof kk.sfx & { link(o?: kk.PlayOpts): void; blaze(pose: BlazePose): void };
 /** the game hooks: logged, then played by the pack unless muted */
 export const sfx = Object.fromEntries(Object.keys(kk.sfx).map(k => [k, (...args: unknown[]) => {
   log(k, args);
@@ -29,6 +31,11 @@ export const sfx = Object.fromEntries(Object.keys(kk.sfx).map(k => [k, (...args:
 /** v0.3.5 connect beat: fired once, as the two part-colour lines start drawing into the answer (0.1 s after the tap,
  *  passed as { delay }). Silent stub (logged only) until the Audio Engineer's sound is approved. */
 sfx.link = (o?: kk.PlayOpts) => { log('link', [o]); };
+/** silent stub (logged as ['blaze', [], t, pose]) until the Audio Engineer's Blaze sounds are approved; then it plays
+ *  the pose's sound unless muted, like every other hook */
+sfx.blaze = (pose: BlazePose) => {
+  log('blaze', []); const L = (window as any).__sfxLog; if (L?.length) L[L.length - 1].push(pose);
+};
 
 /** v0.3.3: the counter tile turns green on the final count (150 ms after partPop(1)) */
 export function total(o?: kk.PlayOpts): void { sfx.total(o); }

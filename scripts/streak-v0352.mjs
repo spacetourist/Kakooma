@@ -38,21 +38,25 @@ async function playTo(to, skipLessons) {
 }
 const timing = () => kk(() => { const t0 = window.__tapT, L = window.__sfxLog, c = window.__kkConfetti || [];
   const at = n => { const e = L.find(e => e[0] === n); return e ? Math.round(e[2] - t0) : null; };
-  return { correct: at('correct'), streak: at('streak'), streakN: (L.find(e => e[0] === 'streak') || [])[1], shower1: c.find(e => /^shower/.test(e[0])) ? Math.round(c.find(e => /^shower/.test(e[0]))[1] - t0) : null, stage: window.__kk.teachStage }; });
+  const ch = L.find(e => e[0] === 'blaze' && e[3] === 'cheer');
+  return { branch: !!window.__kkReact, cheer: ch ? Math.round(ch[2] - t0) : null, correct: at('correct'), streak: at('streak'), streakN: (L.find(e => e[0] === 'streak') || [])[1], shower1: c.find(e => /^shower/.test(e[0])) ? Math.round(c.find(e => /^shower/.test(e[0]))[1] - t0) : null, stage: window.__kk.teachStage }; });
 // A: x5 in the lesson (default teach: milestone -> full lesson; shower at the bond)
 await open('?round=600&level=easy');
 await tapEl('#mStart'); await playTo(5, true);
 await page.waitForFunction(() => (window.__kkConfetti || []).some(e => /^shower/.test(e[0])), null, { timeout: 15000 });
 let a = await timing();
 check(a.correct < 20 && a.streakN?.[0] === 5 && a.shower1 > 1000 && Math.abs(a.streak - a.shower1) <= 1, `x5 lesson: correct at +${a.correct} ms (tap), shower's first burst at +${a.shower1} ms, streak(5) at +${a.streak} ms (same tick)`);
+if (a.branch) check(Math.abs(a.cheer - a.streak) <= 1, `x5 lesson: blaze('cheer') + pose swap at +${a.cheer} ms, with streak(5)`);
 // B: x5 / x10 with no lesson (teach=quick): the held-board shower at 0.5 s
 await open('?round=600&level=easy&teach=quick');
 await tapEl('#mStart'); await playTo(5, false);
 let b = await timing();
 check(b.correct < 20 && b.streakN?.[0] === 5 && Math.abs(b.shower1 - 500) < 60 && Math.abs(b.streak - b.shower1) <= 1, `x5 no lesson: correct at +${b.correct} ms, shower's first burst at +${b.shower1} ms, streak(5) at +${b.streak} ms`);
+if (b.branch) check(Math.abs(b.cheer - b.streak) <= 1, `x5 held board: blaze('cheer') + pose swap at +${b.cheer} ms, with streak(5)`);
 await playTo(5, false); // streak 10
 let b10 = await timing();
 check(b10.streakN?.[0] === 10 && Math.abs(b10.streak - b10.shower1) <= 1, `x10 no lesson: shower's first burst at +${b10.shower1} ms, streak(10) at +${b10.streak} ms`);
+if (b10.branch) check(Math.abs(b10.cheer - b10.streak) <= 1, `x10 held board: blaze('cheer') at +${b10.cheer} ms, with streak(10)`);
 // C: x20 (no shower): streak stays on the tap
 await playTo(10, false);
 let c = await timing();
@@ -62,6 +66,7 @@ await open('?round=600&level=easy&teach=quick', true);
 await tapEl('#mStart'); await playTo(5, false);
 let d = await timing();
 check(d.streakN?.[0] === 5 && d.streak < 20 && d.shower1 === null, `reduced motion x5: no shower, streak(5) on the tap (+${d.streak} ms)`);
+if (d.branch) check(d.cheer !== null && d.cheer < 40, `reduced motion x5: cheer stays at its old moment, the frame after the tap (+${d.cheer} ms)`);
 // E: lesson skipped before its bond: the deferred streak plays at the next board instead of being lost
 await open('?round=600&level=easy');
 await tapEl('#mStart');
@@ -69,6 +74,18 @@ for (let s = 1; s <= 5; s++) { await waitPlay(); await wait(150); if (s === 5) a
 await waitPlay(); await wait(200);
 const e = await kk(() => window.__sfxLog.filter(e => e[0] === 'streak').map(e => e[1]));
 check(e.length === 1 && e[0][0] === 5, `x5 lesson skipped before the bond: streak(5) still plays once, at the next board (${JSON.stringify(e)})`);
+if (await kk(() => !!window.__kkReact)) {
+  const f = await kk(() => { const s = window.__sfxLog.find(e => e[0] === 'streak'), c = window.__sfxLog.find(e => e[0] === 'blaze' && e[3] === 'cheer'); return { s: s && Math.round(s[2]), c: c && Math.round(c[2]), n: window.__sfxLog.filter(e => e[0] === 'blaze' && e[3] === 'cheer').length }; });
+  check(f.n === 1 && Math.abs(f.c - f.s) <= 1, `x5 lesson skipped: cheer fires once, with the deferred streak(5), as the next board appears (${JSON.stringify(f)})`);
+  // round ends while the cheer is pending: dropped
+  // (held board, no lesson: Quit is reachable during the beat; the shower would start at +0.5 s)
+  await open('?round=600&level=easy&teach=quick');
+  await tapEl('#mStart');
+  for (let s = 1; s <= 5; s++) { await waitPlay(); await wait(150); if (s === 5) await kk(() => { window.__sfxLog.length = 0; }); await tapAnswer(); if (s < 5) await wait(1150); }
+  await wait(200); await tapEl('#gQuit'); await wait(1500);
+  const g = await kk(() => ({ streak: window.__sfxLog.filter(e => e[0] === 'streak').length, cheer: window.__sfxLog.filter(e => e[0] === 'blaze' && e[3] === 'cheer').length, phase: window.__kk.phase }));
+  check(g.streak === 0 && g.cheer === 0 && g.phase === 'menu', `x5 then quit before the shower: deferred streak + cheer dropped ${JSON.stringify(g)}`);
+}
 check(errs.length === 0, 'no console errors ' + JSON.stringify(errs));
 console.log(log.join('\n')); if (fails.length) console.log(fails.join('\n'));
 console.log(fails.length ? `${fails.length} FAILED` : 'ALL V0352 STREAK CHECKS PASSED');
