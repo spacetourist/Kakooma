@@ -255,7 +255,7 @@ export function teach(ctx: TeachCtx, a: number, b: number): TeachRun {
     if (await wait(tCap)) return;
     // the caption has landed and the bond is complete: one confetti burst onto the finished bond, Blaze hops
     ctx.onStage?.('cheer'); sfx.caption(); sfx.cheer();
-    confetti(layer, W.x, W.y + 40, 30, (a, el) => { anims.push(a); els.push(el); });
+    confetti(layer, W.x, P[0].y, Math.max(80, Math.abs(P[1].x - P[0].x) / 2 + 50)); // v0.3.5: two angled bursts from either side of the bond (canvas, keeps falling after a skip)
     if (!reduced) ctx.onHop();
     if (await wait(tClear - tCap)) return; // hold: 2.5 s of reading after the caption lands
     // clear: the bond fades, then teach ends and the caller restores "? + ? = ?" and shows the next board

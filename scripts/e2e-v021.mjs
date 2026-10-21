@@ -31,7 +31,7 @@ const tapTile = i => tapEl(`.tile[data-i="${i}"]`);
 const answerIdx = () => kk(() => window.__kk.puzzle.nums.indexOf(window.__kk.puzzle.answer));
 const wrongIdx = () => kk(() => { const p = window.__kk.puzzle, a = p.nums.indexOf(p.answer); return a === 0 ? 1 : 0; });
 const waitPlay = (t = 9000) => page.waitForFunction(() => window.__kk.phase === 'play', null, { timeout: t });
-const stage = (g, t = 6000) => page.waitForFunction(g => window.__kk.teachStage === g, g, { timeout: t });
+const stage = (g, t = 8000) => page.waitForFunction(g => window.__kk.teachStage === g, g, { timeout: t });
 const queue = list => kk(l => { window.__kkNext = l; }, list);
 const P = (nums, a, b) => ({ nums, a, b, answer: a + b });
 const clock = () => kk(() => ({ rem: window.__kk.left - (window.__kk.running ? performance.now() - window.__kk.since : 0), left: window.__kk.left, running: window.__kk.running, phase: window.__kk.phase, stage: window.__kk.teachStage }));
@@ -88,13 +88,13 @@ const fb = await kk(() => ({ op: Math.max(...[...document.querySelectorAll('#fx 
 check(fb.op < 0.01 && fb.lines === 1, 'frames, captions and counters fully faded (opacity 0) before the answer rises into the bond ' + JSON.stringify(fb));
 await wait(150); await shot('06-solve-4-handover');
 await stage('cheer');
-const overBond = await kk(() => ({ confetti: document.querySelectorAll('#fx .confetti').length,
+const overBond = await kk(() => ({ confetti: document.querySelectorAll('canvas.confetti-canvas').length, // v0.3.5: canvas-confetti (worker-drawn, pieces not countable)
   lines: [...document.querySelectorAll('#fx .bondlines line')].map(l => Math.round(parseFloat(getComputedStyle(l).strokeDashoffset))),
   parts: [...document.querySelectorAll('#fx .bnode.p0, #fx .bnode.p1')].map(e => +(+getComputedStyle(e).opacity).toFixed(2)),
   cap: +(+getComputedStyle(document.querySelector('#fx .bondcap')).opacity).toFixed(2),
   hop: document.getElementById('blaze').getAnimations().length + document.getElementById('blazeBody').getAnimations().length }));
 await wait(280); await shot('07-solve-5-bond-cheer');
-check(overBond.confetti > 10 && overBond.lines.every(x => x === 0) && overBond.parts.every(x => x === 1) && overBond.cap >= 0.98 && overBond.hop > 0, 'confetti + Blaze hop fire once the bond and caption are complete ' + JSON.stringify(overBond));
+check(overBond.confetti === 1 && overBond.lines.every(x => x === 0) && overBond.parts.every(x => x === 1) && overBond.cap >= 0.98 && overBond.hop > 0, 'confetti + Blaze hop fire once the bond and caption are complete ' + JSON.stringify(overBond));
 await wait(1500);
 const hold = await kk(() => ({ stage: window.__kk.teachStage, phase: window.__kk.phase, cap: +getComputedStyle(document.querySelector('#fx .bondcap')).opacity, newConfetti: document.querySelectorAll('#fx .confetti').length }));
 check(hold.stage === 'cheer' && hold.phase === 'feedback' && hold.cap === 1, 'bond + caption still held 1.5 s after the caption lands ' + JSON.stringify(hold));
@@ -134,11 +134,11 @@ await shot('11-skip-after');
 
 // ---------- quick solve (4th) ----------
 const tc = await kk(() => window.__kk.teachCount);
-await wait(200); await tapTile(await answerIdx()); await wait(80);
+await wait(200); await tapTile(await answerIdx()); await wait(620); // v0.3.5: the sum strip fills in 0.5 s into the connect beat
 const q = await kk(() => ({ tc: window.__kk.teachCount, phase: window.__kk.phase, sum: document.getElementById('sum').textContent, fx: document.querySelectorAll('#fx .ctr').length }));
-check(q.tc === tc && q.phase === 'feedback' && /^\d+\+\d+=\d+$/.test(q.sum) && q.fx === 0, 'solve 4: quick bounce + sum strip (no teaching)');
+check(q.tc === tc && q.phase === 'feedback' && /^\d+\+\d+=\d+$/.test(q.sum) && q.fx === 0, 'solve 4: connect beat + sum strip (no teaching)');
 await shot('12-quick-solve');
-const qs = Date.now(); await waitPlay(); check(Date.now() - qs < 700, 'quick feedback stays ~500 ms');
+const qs = Date.now(); await waitPlay(); check(Date.now() - qs < 700, 'quick feedback (connect beat) ends at ~1 s');
 
 // ---------- wrong tap caption, then correct => full ----------
 await wait(200);
@@ -151,14 +151,14 @@ await shot('13-wrong-caption');
 await wait(2000); const wcBack = await kk(() => document.getElementById('sum').className);
 check(/\b(ph|hint)\b/.test(wcBack), 'caption clears after 2 s, strip back to ' + wcBack);
 const tc2 = await kk(() => window.__kk.teachCount);
-await tapTile(await answerIdx()); await wait(100);
+await tapTile(await answerIdx()); await wait(1150); // the lesson starts after the 1 s connect beat
 check((await kk(() => window.__kk.teachCount)) === tc2 + 1 && (await kk(() => document.querySelectorAll('.tile.bad').length)) === 0, 'correct after a mistake plays the full solve, no coral left');
 await stage('fly'); await tapAnywhere(); await waitPlay();
 
 // ---------- streak milestone x5 => full ----------
 for (let k = 0; k < 3; k++) { await wait(150); await tapTile(await answerIdx()); await waitPlay(); }
 const tc3 = await kk(() => window.__kk.teachCount);
-await wait(150); await tapTile(await answerIdx()); await wait(100);
+await wait(150); await tapTile(await answerIdx()); await wait(1150);
 const ms5 = await kk(() => ({ streak: window.__kk.streak, tc: window.__kk.teachCount }));
 check(ms5.streak === 5 && ms5.tc === tc3 + 1, 'streak x5 milestone plays the full solve');
 await stage('fly'); await tapAnywhere(); await waitPlay();
@@ -337,9 +337,8 @@ async function lessonRun(onTap) {
   // confetti peak: one burst, widest spread ~450 ms after it fires
   await lessonRun(async () => {
     await stage('cheer'); await wait(430); await shot('confetti-peak');
-    const c = await kk(() => document.querySelectorAll('#fx .confetti').length); await wait(800);
-    const c2 = await kk(() => document.querySelectorAll('#fx .confetti').length);
-    check(c === 30 && c2 <= 30, `single confetti burst of 30 (no second burst): ${c} then ${c2}`);
+    const c = await kk(() => document.querySelectorAll('canvas.confetti-canvas').length);
+    check(c === 1, `confetti drawn on the one canvas-confetti canvas (v0.3.5; burst size/shape checked in connect-v035): ${c}`);
   });
 }
 

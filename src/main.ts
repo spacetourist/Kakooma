@@ -1,7 +1,7 @@
 import './style.css';
 import { generate, sumKey, type Puzzle, type Level, LEVELS, CAP, LEVEL_NAME, isLevel, supports } from './puzzle';
 import { teach, type TeachRun } from './teach';
-import { haptic, ripple, reducedMotion } from './fx';
+import { haptic, ripple, reducedMotion, shower, preloadConfetti } from './fx';
 import { sfx, initAudio, isMuted, setMuted, whenRunning } from './sfx';
 import { initLab } from './lab';
 import { avgSolve, secLabel } from './stats';
@@ -13,7 +13,8 @@ const Q = new URLSearchParams(location.search);
 /** Round length; ?round=<seconds> shortens it for testing. */
 const ROUND_MS = Math.max(5, Math.min(600, Number(Q.get('round')) || 60)) * 1000;
 const PENALTY_MS = 3000;          // wrong tap
-const FEEDBACK_MS = 500;          // correct-answer feedback; the round timer is PAUSED for it
+/** v0.3.5 connect beat (GD): the correct-answer reveal, same on every level; the round timer is PAUSED for it */
+const CONNECT = { pop: 150, lineAt: 100, line: 400, pulseAt: 500, pulse: 200, fadeAt: 850, fade: 150, end: 1000 };
 const SLIDE_MS = 250;             // picker change: tiles slide to the new corners
 /** v0.3: boards are per level + number count (kk.board.v2); v1 (no level) is migrated once to Hard and left in place as a backup. */
 const LS = { board: 'kk.board.v2', boardV1: 'kk.board.v1', n: 'kk.n', lv: 'kk.lv' };
@@ -210,6 +211,63 @@ function replay(s: Solved, chip: HTMLElement) {
   });
 }
 
+// ---------- connect beat (v0.3.5) ----------
+/** GD's reveal, ~1 s, timer paused: 0-0.15 s the answer pops green to 1.08 and every other tile dims to 40 %;
+ *  0.1-0.5 s the parts light up (#9cc0ff smaller, #3a7bff larger) and a thick round-ended line in each part's colour
+ *  draws into the answer, both arriving together (sfx.link() at 0.1 s); 0.5-0.7 s one soft pulse on the answer as the
+ *  lines join + the sum strip fills in; hold, then lines + dimming fade over 0.15 s (0.85-1.0 s) and hand over.
+ *  Reduced motion: same clock, the lines simply appear, no scale. Everything is built in the next frame (never on the
+ *  input path); a tap anywhere but a button skips it. */
+function connectBeat(s: Solved, iC: number, big: boolean, then: () => void, onSkip: () => void) {
+  const run = st.run, C = CONNECT;
+  let done = false; const anims: Animation[] = []; let svg: SVGSVGElement | null = null; let raf = 0;
+  const others = () => tiles.filter((_, k) => k < s.nums.length && k !== iC && k !== iS && k !== iL);
+  const iS = s.nums.indexOf(Math.min(s.a, s.b)), iL = s.nums.indexOf(Math.max(s.a, s.b)) === iS ? s.nums.lastIndexOf(Math.max(s.a, s.b)) : s.nums.indexOf(Math.max(s.a, s.b));
+  const cleanup = () => { cancelAnimationFrame(raf); for (const a of anims) a.cancel(); svg?.remove(); for (const t of tiles) t.classList.remove('cdim'); };
+  const finish = (next: () => void) => {
+    if (done) return; done = true; if (st.teach === handle) st.teach = null; st.teachStage = ''; document.removeEventListener('pointerdown', catcher, true);
+    cleanup(); tiles[iS].classList.add('add', 'cs'); tiles[iL].classList.add('add', 'cl'); showSum(s);
+    if (st.run === run) next();
+  };
+  const handle = { skip: () => { Promise.resolve().then(() => finish(onSkip)); } };
+  // tap anywhere skips the beat; buttons (Quit, mute) still work, so no full-screen catcher here
+  const catcher = (e: PointerEvent) => { if ((e.target as HTMLElement).closest?.('button, input, a')) return; e.preventDefault(); e.stopPropagation(); handle.skip(); };
+  document.addEventListener('pointerdown', catcher, true);
+  st.teach = handle; st.teachStage = 'connect';
+  raf = requestAnimationFrame(() => {
+    if (done) return;
+    const reduced = reducedMotion(), ans = tiles[iC];
+    for (const t of others()) t.classList.add('cdim');
+    // (easing per segment: an effect-wide easing would warp the whole 1 s clock)
+    if (!reduced) anims.push(ans.animate([{ transform: 'scale(1)', easing: 'cubic-bezier(.34,1.56,.64,1)' }, { transform: 'scale(1.08)', offset: C.pop / C.end }, { transform: 'scale(1.08)', offset: C.pulseAt / C.end, easing: 'ease-out' },
+      { transform: 'scale(1.14)', offset: (C.pulseAt + C.pulse * 0.45) / C.end, easing: 'ease-in-out' }, { transform: 'scale(1.08)', offset: (C.pulseAt + C.pulse) / C.end }, { transform: 'scale(1.08)', offset: C.fadeAt / C.end, easing: 'ease-in-out' }, { transform: 'scale(1)' }],
+      { duration: C.end }));
+    // the lines: from each part tile's edge into the answer's edge, in the part's colour
+    svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); svg.setAttribute('class', 'connect');
+    svg.setAttribute('viewBox', `0 0 ${fxEl.clientWidth} ${fxEl.clientHeight}`); fxEl.appendChild(svg);
+    const A = cur[iC], rA = ans.offsetWidth / 2;
+    [iS, iL].forEach((k, part) => {
+      const P = cur[k], rP = tiles[k].offsetWidth / 2, d = Math.hypot(A.x - P.x, A.y - P.y) || 1, ux = (A.x - P.x) / d, uy = (A.y - P.y) / d;
+      const x1 = P.x + ux * (rP - 4), y1 = P.y + uy * (rP - 4), x2 = A.x - ux * (rA * 1.08 - 4), y2 = A.y - uy * (rA * 1.08 - 4), len = Math.max(1, Math.hypot(x2 - x1, y2 - y1));
+      const l = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+      l.setAttribute('x1', x1.toFixed(1)); l.setAttribute('y1', y1.toFixed(1)); l.setAttribute('x2', x2.toFixed(1)); l.setAttribute('y2', y2.toFixed(1));
+      l.setAttribute('class', part ? 'cl' : 'cs'); l.style.strokeDasharray = String(len); svg!.appendChild(l);
+      // hidden until its draw starts (a fully offset round-capped line still paints its caps), then draw, hold, fade
+      anims.push(l.animate(reduced
+        ? [{ opacity: 0, strokeDashoffset: 0 }, { opacity: 0, offset: C.lineAt / C.end }, { opacity: 1, offset: C.lineAt / C.end }, { opacity: 1, offset: C.fadeAt / C.end }, { opacity: 0 }]
+        : [{ opacity: 0, strokeDashoffset: len }, { opacity: 0, strokeDashoffset: len, offset: C.lineAt / C.end }, { opacity: 1, strokeDashoffset: len * 0.97, offset: (C.lineAt + 20) / C.end, easing: 'cubic-bezier(.4,0,.3,1)' },
+          { opacity: 1, strokeDashoffset: 0, offset: (C.lineAt + C.line) / C.end }, { opacity: 1, strokeDashoffset: 0, offset: C.fadeAt / C.end }, { opacity: 0, strokeDashoffset: 0 }],
+        { duration: C.end, fill: 'both' }));
+      // the part tile lights up in its colour as its line starts
+      later(() => { if (!done) tiles[k].classList.add('add', part ? 'cl' : 'cs'); }, C.lineAt);
+    });
+    sfx.link({ delay: C.lineAt / 1000 }); // once, as the lines start (no partPop in the reveal)
+    later(() => { if (done) return; showSum(s); if (big) shower(); }, C.pulseAt);
+    later(() => { if (!done) for (const t of tiles) t.classList.remove('cdim'); }, C.fadeAt);
+    later(() => finish(then), C.end);
+  });
+}
+
 // ---------- teaching solve ----------
 const fxEl = $('fx'), skipper = $('skipper');
 function runTeach(s: Solved, iC: number, then: () => void) {
@@ -290,10 +348,9 @@ function onTap(i: number, now: number) {
     clearTimeout(capTimer);
     // the solved board shows only the two blue parts and the green answer: clear any wrong (coral) state first
     for (const t of tiles) { t.classList.remove('bad'); for (const a of t.getAnimations()) a.cancel(); }
-    tiles[i].classList.add('ok');
-    tiles[p.nums.indexOf(p.a)].classList.add('add'); tiles[p.nums.indexOf(p.b)].classList.add('add');
+    tiles[i].classList.add('ok'); // pops green now; the parts light up in their colours as the lines start (connect beat)
     const solved: Solved = { a: p.a, b: p.b, c: p.answer, nums: p.nums.slice(), n: st.n, ms: Math.round(now - st.shownAt) };
-    st.solved.push(solved); showSum(solved); addChip(solved, st.solved.length - 1);
+    st.solved.push(solved); addChip(solved, st.solved.length - 1);
     st.solve.push(now - st.shownAt);
     const prev = st.streak; st.score++; st.streak++; st.best = Math.max(st.best, st.streak);
     scoreTxt.textContent = String(st.score); setStreak(st.streak, prev);
@@ -301,11 +358,9 @@ function onTap(i: number, now: number) {
     const milestone = st.streak === 5 || st.streak === 10 || st.streak === 20;
     const newBest = st.prevBest > 0 && st.score === st.prevBest + 1;
     if (newBest) cueNewBest();
-    if (wantsFull(milestone || newBest || hadMistake)) runTeach(solved, i, nextPuzzle);
-    else { // quick: squish -> green bounce + the sum strip
-      if (!reducedMotion()) tiles[i].animate([{ transform: 'scale(.92)' }, { transform: 'scale(1.12)', offset: 0.45 }, { transform: 'scale(1)' }], { duration: 320, easing: 'ease-out' });
-      later(nextPuzzle, FEEDBACK_MS);
-    }
+    const full = wantsFull(milestone || newBest || hadMistake), big = newBest || [3, 5, 10].includes(st.streak);
+    // the connect beat (~1 s), then the counting lesson or the next puzzle; a tap skips the beat (and the lesson)
+    connectBeat(solved, i, big, () => full ? runTeach(solved, i, nextPuzzle) : nextPuzzle(), nextPuzzle);
   } else {
     if (st.badTiles.has(i)) return; // no double penalty for re-tapping the same wrong tile
     st.badTiles.add(i); st.miss++;
@@ -374,7 +429,7 @@ function endRound() {
   $('rBlaze').classList.toggle('cool', top);
   show('results');
   sfx.timeUp();
-  if (top) cueNewBest(); // same tick (so the same frame) as the gold cards appear
+  if (top) { cueNewBest(); shower(); } // same tick (so the same frame) as the gold cards appear; v0.3.5: + the star shower
 }
 const nameIn = $('nameIn') as HTMLInputElement, nameSave = $('nameSave') as HTMLButtonElement, nameClear = $('nameClear') as HTMLButtonElement;
 const nameSlots = [...document.querySelectorAll<HTMLElement>('.slots .nslot')];
@@ -491,5 +546,6 @@ press($('gQuit'), quit);
 }
 boardN = st.n; boardLv = st.lv;
 if (reducedMotion()) document.documentElement.classList.add('reduced');
+preloadConfetti();
 toMenu();
 document.fonts?.ready.then(() => layout(shownN || st.n, 0));

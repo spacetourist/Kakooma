@@ -78,7 +78,7 @@ check(lat.ok && lat.ms < 16, `correct registered synchronously on pointerdown ($
 const l1 = await kk(() => window.__kk.left); await wait(250); const l2 = await kk(() => ({ left: window.__kk.left, running: window.__kk.running, phase: window.__kk.phase }));
 check(l2.phase === 'feedback' && !l2.running && l1 === l2.left, 'timer paused during correct feedback');
 for (let k = 0; k < 4; k++) await correct();
-await wait(60);
+await wait(620); // v0.3.5: the strip fills in 0.5 s into the connect beat
 let s = await kk(() => ({ streak: window.__kk.streak, tier: document.getElementById('blaze').dataset.tier, pill: document.getElementById('streakPill').textContent, eq: document.getElementById('sum').textContent.replace(/([+=])/g, ' $1 '), eqOn: !!document.querySelector('#sum .a'), green: document.querySelectorAll('.tile.ok').length, blue: document.querySelectorAll('.tile.add').length }));
 check(s.streak === 5 && s.tier === '1' && s.pill === 'x5', 'streak x5, Blaze tier 1 ' + JSON.stringify(s));
 check(s.eqOn && /^\d+ \+ \d+ = \d+$/.test(s.eq) && s.green === 1 && s.blue === 2, 'feedback: 1 green, 2 blue, equation ' + s.eq);

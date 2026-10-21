@@ -1,7 +1,7 @@
 {
   "name": "kakooma",
   "private": true,
-  "version": "0.3.4.1",
+  "version": "0.3.5",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -10,8 +10,12 @@
     "test": "vitest run"
   },
   "devDependencies": {
+    "@types/canvas-confetti": "^1.9.0",
     "typescript": "~5.6.3",
     "vite": "^5.4.10",
     "vitest": "^2.1.4"
+  },
+  "dependencies": {
+    "canvas-confetti": "^1.9.4"
   }
 }

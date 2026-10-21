@@ -66,6 +66,9 @@ button { font: inherit; color: inherit; border: 0; background: none; padding: 0;
 #play[data-mode="game"] .tile:active { transform: scale(.95); }
 .tile.ok { background: var(--green); color: #fff; }
 .tile.add { background: var(--blue); color: #fff; }
+/* v0.3.5 connect beat: parts light up in their own colours, everything else dims to 40 % (0.15 s in and out) */
+.tile.add.cs { background: var(--lblue); } .tile.add.cl { background: var(--blue); }
+.tile.cdim { opacity: .4; transition: opacity .15s; }
 .tile.bad { box-shadow: 0 0 0 3px var(--coral), var(--shadow); color: var(--coral); }
 .prompt { margin: 6px 0 0; text-align: center; font: 700 15px/1.3 var(--f-ui); color: var(--muted); }
 
@@ -193,7 +196,7 @@ button { font: inherit; color: inherit; border: 0; background: none; padding: 0;
 .fx > *, .labfx > * { position: absolute; left: 0; top: 0; }
 .plate { border-radius: 24px; background: rgba(246, 247, 251, .985); }
 .ring { border-radius: 50%; border: 3px solid var(--blue); will-change: transform, opacity; }
-.confetti { width: 8px; height: 12px; border-radius: 2px; will-change: transform, opacity; }
+.confetti-canvas { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 60; }
 .tf { display: grid; grid-template-columns: repeat(5, var(--cs)); gap: var(--g); padding: var(--p); background: var(--card); border-radius: 10px; box-shadow: var(--shadow); transition: box-shadow .2s; }
 .tf i { width: var(--cs); height: var(--cs); border-radius: 5px; border: 1.5px solid var(--line); }
 
@@ -226,6 +229,9 @@ button { font: inherit; color: inherit; border: 0; background: none; padding: 0;
 .fx .srcb.drained { box-shadow: inset 0 0 0 3px currentColor; } .fx .srcb.drained .fill { display: none; }
 .fx .srcb.p0.drained { color: #5287ea; } .fx .srcb.p1.drained { color: var(--blue); }
 .bondlines { width: 100%; height: 100%; overflow: visible; }
+.connect { width: 100%; height: 100%; overflow: visible; }
+.connect line { stroke-width: 10; stroke-linecap: round; fill: none; }
+.connect line.cs { stroke: var(--lblue); } .connect line.cl { stroke: var(--blue); }
 .bondlines line, .labbond line { stroke: var(--line); stroke-width: 4; stroke-linecap: round; }
 .fx .skiphint { top: auto; bottom: 0; left: 0; right: 0; text-align: center; font: 800 11px/1 var(--f-ui); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
 .skipper { position: fixed; inset: 0; z-index: 40; background: transparent; touch-action: none; }

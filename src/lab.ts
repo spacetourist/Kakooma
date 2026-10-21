@@ -63,7 +63,7 @@ export function initLab(press: (el: Element, fn: (e: Event) => void) => void, on
       const st = $('labStar'); st.classList.add('on');
       st.animate([{ transform: 'scale(.2) rotate(-40deg)' }, { transform: 'scale(1.4) rotate(10deg)', offset: 0.6 }, { transform: 'scale(1) rotate(0)' }], { duration: 650, easing: 'ease-out' });
       const r = $('labBond').getBoundingClientRect(), L = $('labFx').getBoundingClientRect();
-      confetti($('labFx'), r.x - L.x + r.width / 2, r.y - L.y + 40, 30);
+      confetti($('labFx'), r.x - L.x + r.width / 2, r.y - L.y + 40);
     }
     save(lab.data); renderFound(); renderWholes();
     const chip = found.querySelector(`[data-a="${a}"]`) as HTMLElement | null;

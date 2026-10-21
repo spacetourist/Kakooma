@@ -68,7 +68,7 @@ check(await kk(() => document.getElementById('sum').classList.contains('wrong'))
 await wait(2100);
 check((await sumState()).hint, 'hint back in the strip after the wrong-tap caption');
 await shot('wrong');
-await wait(200); await tapTile(await answerIdx()); await wait(170);
+await wait(200); await tapTile(await answerIdx()); await wait(620); // v0.3.5: strip fills in 0.5 s into the connect beat
 s = await sumState();
 const t = await kk(() => ({ bad: document.querySelectorAll('.tile.bad').length, ok: document.querySelectorAll('.tile.ok').length, add: document.querySelectorAll('.tile.add').length, p: window.__kk.puzzle }));
 check(t.bad === 0 && t.ok === 1 && t.add === 2, 'wrong then correct: no coral left, 1 green + 2 blue ' + JSON.stringify({ bad: t.bad, ok: t.ok, add: t.add }));
@@ -114,7 +114,7 @@ await tapEl('#mStart'); await waitPlay(); await wait(300);
 check((await sumState()).hint && (await geo()).chips === 0, 'N=7 new round: hint back, tray empty');
 await shot('n7-first');
 const tiles7 = (await geo()).tiles;
-await tapTile(await wrongIdx()); await wait(100); await tapTile(await answerIdx()); await wait(170);
+await tapTile(await wrongIdx()); await wait(100); await tapTile(await answerIdx()); await wait(620); // v0.3.5: strip fills in 0.5 s into the connect beat
 check((await kk(() => document.querySelectorAll('.tile.bad').length)) === 0, 'N=7 wrong then correct: no coral left');
 s = await sumState(); check(!!s.ans && s.ans[1] === GREEN, 'N=7 sum strip ' + s.text);
 await shot('n7-sum');
