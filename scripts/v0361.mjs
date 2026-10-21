@@ -16,7 +16,8 @@ const browser = await chromium.launch({ executablePath: '/usr/bin/google-chrome'
 const fails = [], log = []; const check = (c, m) => (c ? log : fails).push((c ? 'ok   ' : 'FAIL ') + m);
 const json = await (await fetch(BASE + 'audio/kk_sfx.json')).json(), SR = json.sampleRate;
 const sprite = off => { let best = '?', d = 1e9; for (const [k, v] of Object.entries(json.sprites)) { const dd = Math.abs(off * SR - v.start); if (dd < d) { d = dd; best = k; } } return d < 0.01 * SR ? best : '?'; };
-const page = await (await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true })).newPage();
+const DPR = +(process.env.DPR || 2); // DPR=3: crispness shots
+const page = await (await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: DPR, isMobile: true, hasTouch: true })).newPage();
 const errs = []; page.on('pageerror', e => errs.push(e.message)); page.on('console', m => { if (m.type() === 'error') errs.push(m.text()); });
 await page.addInitScript(() => { window.__sfxLog = []; window.__au = []; const S = AudioBufferSourceNode.prototype.start;
   AudioBufferSourceNode.prototype.start = function (when = 0, off = 0) { if (this.buffer && this.buffer.length > 1) window.__au.push([performance.now(), off]); return S.apply(this, arguments); }; });
@@ -40,6 +41,8 @@ let r = await R();
 const s1 = await kk(t => ({ hooks: window.__sfxLog.filter(e => e[2] >= t - 1000).map(e => e[0] + (e[3] ? ':' + e[3] : '')), au: window.__au.filter(a => a[0] >= t - 1000).map(a => a[1]) }), tEnd);
 const sp = s1.au.map(sprite);
 if (process.env.DBG || !sp.includes('newBest')) console.log('debug', JSON.stringify(await kk(t => ({ t, au: window.__au.map(a => [Math.round(a[0]), a[1]]), log: window.__sfxLog.map(e => [e[0], Math.round(e[2])]).slice(-12), diag: window.__kkAudio?.diag?.() }), tEnd)), s1.au.length);
+{ const d = await kk(() => { const i = document.querySelector('#rBlaze img'), b = i.getBoundingClientRect(); return { cssW: b.width, cssH: b.height, nat: i.naturalWidth, dpr: devicePixelRatio }; });
+  check(d.nat >= d.cssW * d.dpr - 1, `results cheer pose sharp at DPR ${d.dpr}: ${d.nat} px source for ${d.cssW.toFixed(1)} css px (needs ${Math.round(d.cssW * d.dpr)})`); }
 check(r.cool && r.img === 'cheer.webp' && r.decoded && r.anim === 'rhop' && r.shades === 0, `new #1: Blaze in the cheer pose (${r.img}, ${r.nat}), hop loop ${r.anim}, no sunglasses`);
 check(!s1.hooks.some(h => h.startsWith('blaze')) && !sp.some(k => k.startsWith('blaze_')) && sp.includes('newBest') && sp.includes('timeUp'), `new #1 results: no blaze() call and no blaze_* sound over ~3 hops; sounds: ${sp.join(', ')} (ctx ${await kk(() => window.__kkAudio?.state())}, ${await kk(() => window.__au.length)} sources in all)`);
 await page.screenshot({ path: `${SHOTS}v0361-top1.png` });
