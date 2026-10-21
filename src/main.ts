@@ -470,7 +470,7 @@ function toMenu() {
   if (!shapeOk(st.lv, st.n)) st.n = fallbackN(st.lv, st.n);
   note = ''; renderPicker(); showShape(); layout(st.n, 0); warm();
 }
-// v0.3.4 (GD): sound toggle on the menu, left of Blaze. Muting stops anything playing or queued and silences every later
+// v0.3.4 (GD/AE): sound toggle on the menu, left of Blaze. Muting sets the master gain to 0, clears playing/queued sounds (stopAll) and ignores every later
 // hook; the tap plays uiTap only when it turns sound back on. Saved in localStorage ('kk.mute').
 const muteBtn = $('mMute');
 function drawMute() { const m = isMuted(); muteBtn.classList.toggle('off', m); muteBtn.setAttribute('aria-pressed', String(m)); muteBtn.setAttribute('aria-label', m ? 'Sound off' : 'Sound on'); }
