@@ -14,6 +14,7 @@ export interface TeachCtx {
   n: number; iS: number; iL: number; iC: number; // tile indices: smaller part, larger part, answer
   onHop: () => void;             // Blaze hop
   onStage?: (s: string) => void; // progress hook (tests / analytics)
+  onTen?: (n: number) => void;   // v0.3.5: a frame completes (n = running count: 10, 20, ...), on the ring/flash frame
   pace?: Pace;                   // v0.3.2: counting speed by level (default medium)
   big?: boolean;                 // v0.3.5.1: streak 3/5/10 or a new #1: the star shower replaces the bond burst
 }
@@ -173,6 +174,7 @@ export function teach(ctx: TeachCtx, a: number, b: number): TeachRun {
               ring(frames[ten.box], CAP_MS); fadeIn(cap, 160, 0, 4); ctx.onStage?.('ten');
               if (shown < plan.c) later(CAP_MS, () => anim(cap, [{ opacity: 1 }, { opacity: 0 }], { duration: 160, fill: 'forwards' }));
             } else ring(frames[ten.box], 380);
+            ctx.onTen?.(shown);
           }
           // keep the stagger relative to the frame the dot was actually counted on (a dropped/stalled frame must not
           // pull partPop onto the same frame as the last count())

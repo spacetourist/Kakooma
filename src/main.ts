@@ -4,6 +4,7 @@ import { teach, type TeachRun } from './teach';
 import { haptic, ripple, reducedMotion, shower, confetti, preloadConfetti, SHOWER } from './fx';
 import { sfx, initAudio, isMuted, setMuted, whenRunning } from './sfx';
 import { initLab } from './lab';
+import { blazeCtl, preloadPoses, POSES, WHOA_ON, type Pose } from './blaze';
 import { avgSolve, secLabel } from './stats';
 
 const $ = (id: string) => document.getElementById(id)!;
@@ -47,7 +48,7 @@ function later(fn: () => void, ms: number) {
   const h = window.setTimeout(() => { st.timers.delete(h); if (st.run === run) fn(); }, ms);
   st.timers.add(h);
 }
-function cancelTimers() { for (const h of st.timers) clearTimeout(h); st.timers.clear(); st.teach?.skip(); }
+function cancelTimers() { for (const h of st.timers) clearTimeout(h); st.timers.clear(); st.teach?.skip(); idleStop(); }
 const esc = (s: string) => s.replace(/[&<>"']/g, c => `&#${c.charCodeAt(0)};`);
 
 // ---------- version ----------
@@ -120,10 +121,10 @@ function showPuzzle(p: Puzzle, pop: boolean) {
 // ---------- Blaze (streak) ----------
 const blaze = $('blaze'), blazeBody = $('blazeBody'), pill = $('streakPill');
 const tier = (s: number) => (s >= 20 ? 3 : s >= 10 ? 2 : s >= 5 ? 1 : 0);
-function setStreak(s: number, prev: number) {
+function setStreak(s: number, prev: number, hop = true) {
   pill.textContent = `x${s}`;
   const t = tier(s); blaze.dataset.tier = String(t);
-  if (t > tier(prev)) blazeBody.animate([{ transform: 'translateY(0)' }, { transform: 'translateY(-14px)', offset: 0.4 }, { transform: 'translateY(0)' }], { duration: 380, easing: 'ease-out' });
+  if (t > tier(prev) && hop) blazeBody.animate([{ transform: 'translateY(0)' }, { transform: 'translateY(-14px)', offset: 0.4 }, { transform: 'translateY(0)' }], { duration: 380, easing: 'ease-out' });
   if (t > tier(prev)) sfx.streak([0, 5, 10, 20][t]); // Blaze grows (called after the streak state changed)
 }
 /** Wrong tap: Blaze tilts his head; if a streak broke he also shrinks and sighs (eyes close). */
@@ -132,6 +133,29 @@ function blazeWrong(sighToo: boolean) {
   blazeBody.animate([{ transform: 'rotate(0)' }, { transform: `rotate(-14deg)${s}`, offset: 0.25 }, { transform: `rotate(-14deg)${s}`, offset: 0.75 }, { transform: 'rotate(0)' }], { duration: 800, easing: 'ease-in-out' });
   if (sighToo) for (const l of blaze.querySelectorAll('.lid, .mouth')) l.animate([{ opacity: 0 }, { opacity: 1, offset: 0.12 }, { opacity: 1, offset: 0.88 }, { opacity: 0 }], { duration: 460, delay: 80 });
 }
+// ---------- Blaze reactions (v0.3.5) ----------
+const bz = blazeCtl(blazeBody, blaze);
+const FORCE = (POSES as string[]).includes(Q.get('blaze') ?? '') ? Q.get('blaze') as Pose : null; // ?blaze=<pose>: hold it, triggers off
+const MILESTONES = [3, 5, 10], SPARKS: Record<number, number> = { 3: 4, 5: 5, 10: 7 };
+const SPECIAL_EVERY = 3, IDLE_MS = 8000, SPEEDY_MS = 2000;
+const bzs = { solves: 0, lastSpecial: -Infinity, oopsFlip: false, whoaUsed: false };
+/** oops / clap / think / whoa: at most one every 3 solves (comeback + milestones are exempt and always play) */
+function special(p: Pose, o?: { hold?: boolean }): boolean {
+  if (FORCE || bzs.solves - bzs.lastSpecial < SPECIAL_EVERY) return false;
+  if (!bz.react(p, o)) return false;
+  bzs.lastSpecial = bzs.solves; return true;
+}
+let idleT = 0;
+/** think: no tap on the board for ~8 s while in play; cancelled by the next tap */
+function idleArm() {
+  clearTimeout(idleT); if (FORCE) return;
+  const run = st.run;
+  idleT = window.setTimeout(() => { if (st.run === run && st.phase === 'play' && !document.hidden) special('think', { hold: true }); }, IDLE_MS);
+}
+function idleStop() { clearTimeout(idleT); if (!FORCE && bz.current() === 'think') bz.clear(); }
+preloadPoses().then(() => { if (FORCE) bz.react(FORCE, { hold: true }); });
+(window as any).__kkReact = (p: Pose, o?: { sparks?: number; hold?: boolean }) => bz.react(p, o);
+(window as any).__kkBlazeState = () => ({ ...bzs, current: bz.current() });
 function blazeHop() {
   blazeBody.animate([{ transform: 'translateY(0) scale(1)' }, { transform: 'translateY(-18px) scale(1.08)', offset: 0.4 }, { transform: 'translateY(0) scale(1)' }], { duration: 450, easing: 'ease-out' });
 }
@@ -199,7 +223,7 @@ function chipSolve(el: Element): Solved | null { const k = (el as HTMLElement).d
 press(tray, e => { const c = (e.target as HTMLElement).closest('.chip') as HTMLElement | null; if (!c) return; const s = chipSolve(c); if (s) replay(s, c); });
 function replay(s: Solved, chip: HTMLElement) {
   if (st.phase !== 'play' || st.teach || !st.puzzle) return;
-  const t0 = performance.now(); pause(t0); st.phase = 'replay';
+  const t0 = performance.now(); pause(t0); st.phase = 'replay'; idleStop();
   const live = st.puzzle, bad = [...st.badTiles];
   showPuzzle({ nums: s.nums, answer: s.c, a: s.a, b: s.b }, false);
   const iC = s.nums.indexOf(s.c);
@@ -210,7 +234,8 @@ function replay(s: Solved, chip: HTMLElement) {
     showPuzzle(live, false); for (const i of bad) tiles[i].classList.add('bad');
     showSum(null);
     const now = performance.now(); st.shownAt += now - t0; st.phase = 'play'; resume(now);
-  });
+    idleArm();
+  }, false, false);
 }
 
 // ---------- connect beat (v0.3.5) ----------
@@ -274,7 +299,7 @@ function connectBeat(s: Solved, iC: number, big: boolean, then: () => void, onSk
 
 // ---------- teaching solve ----------
 const fxEl = $('fx'), skipper = $('skipper');
-function runTeach(s: Solved, iC: number, then: () => void, big = false) {
+function runTeach(s: Solved, iC: number, then: () => void, big = false, live = true) {
   const run = st.run; let real: TeachRun | null = null, ended = false;
   const end = () => {
     if (ended) return; ended = true;
@@ -288,7 +313,8 @@ function runTeach(s: Solved, iC: number, then: () => void, big = false) {
   requestAnimationFrame(() => {
     if (ended) return;
     real = teach({ layer: fxEl, tiles, centre: i => ({ x: cur[i].x, y: cur[i].y }), n: s.nums.length,
-      iS: s.nums.indexOf(s.a), iL: s.nums.indexOf(s.b), iC, pace: st.lv, big, onHop: blazeHop, onStage: g => { st.teachStage = g; if (g === 'clear') showSum(null); } }, s.a, s.b);
+      iS: s.nums.indexOf(s.a), iL: s.nums.indexOf(s.b), iC, pace: st.lv, big, onHop: blazeHop, onStage: g => { st.teachStage = g; if (g === 'clear') showSum(null); },
+      onTen: c => { if (live && c === 10) special('clap'); } }, s.a, s.b);
     real.done.then(end);
   });
 }
@@ -317,7 +343,7 @@ function startRound() {
   Object.assign(st, { phase: 'play', left: ROUND_MS, running: false, score: 0, miss: 0, streak: 0, best: 0, solve: [], solved: [], seen: new Set<string>(), lastKey: '' });
   tray.replaceChildren(); newestChip = null; st.prevBest = boardFor(st.lv, st.n)[0]?.score ?? 0; st.teachCount = 0;
   scoreTxt.textContent = '0'; setStreak(0, 0); lastTenth = lastSegs = -1; lastLow = null; drawTimer(ROUND_MS);
-  setMode('game'); show('play');
+  setMode('game'); show('play'); bzs.whoaUsed = false;
   layout(st.n, 0);
   lowFired = false; lastTickS = -1;
   nextPuzzle();
@@ -334,6 +360,7 @@ function nextPuzzle() {
   showPuzzle(p, true);
   const now = performance.now();
   st.shownAt = now; st.phase = 'play'; resume(now);
+  idleArm();
 }
 board.addEventListener('pointerdown', e => {
   const t = (e.target as HTMLElement).closest('.tile') as HTMLElement | null;
@@ -341,6 +368,7 @@ board.addEventListener('pointerdown', e => {
   const i = +t.dataset.i!, was = st.phase;
   onTap(i, e.timeStamp);
   if (was === 'play' && i < shownN) { ripple(fxEl, cur[i].x, cur[i].y); haptic(10); sfx.tap(); } // after the state change: never delays input
+  if (was === 'play') requestAnimationFrame(() => { if (!FORCE && bz.current() === 'think') bz.clear(); if (st.phase === 'play') idleArm(); }); // a tap cancels think
 });
 function onTap(i: number, now: number) {
   if (st.phase !== 'play' || !st.puzzle || i >= st.puzzle.nums.length) return;
@@ -357,8 +385,16 @@ function onTap(i: number, now: number) {
     st.solved.push(solved); addChip(solved, st.solved.length - 1);
     st.solve.push(now - st.shownAt);
     const prev = st.streak; st.score++; st.streak++; st.best = Math.max(st.best, st.streak);
-    scoreTxt.textContent = String(st.score); setStreak(st.streak, prev);
+    // Blaze: comeback (thumbs) and 3/5/10 milestones (cheer + flare + sparks) always play; speedy whoa is off until GD's redo
+    bzs.solves++;
+    const cheerNow = !FORCE && !hadMistake && MILESTONES.includes(st.streak), sk = st.streak;
+    scoreTxt.textContent = String(st.score); setStreak(st.streak, prev, !cheerNow);
     sfx.correct();
+    if (!FORCE) requestAnimationFrame(() => {
+      if (hadMistake) bz.react('thumbs');
+      else if (cheerNow) { if (!bz.react('cheer', { sparks: SPARKS[sk] })) blazeHop(); }
+      else if (WHOA_ON && !bzs.whoaUsed && solved.ms < SPEEDY_MS && special('whoa')) bzs.whoaUsed = true;
+    });
     const milestone = st.streak === 5 || st.streak === 10 || st.streak === 20;
     const newBest = st.prevBest > 0 && st.score === st.prevBest + 1;
     if (newBest) cueNewBest();
@@ -376,7 +412,8 @@ function onTap(i: number, now: number) {
     wrongCaption(v); sfx.wrong();
     sfx.penalty({ delay: 0.15 }); // the audio pack sits the time-lost tick just under wrong()
     $('penalty').animate([{ opacity: 1, transform: 'translateY(0)' }, { opacity: 0, transform: 'translateY(-10px)' }], { duration: 700, easing: 'ease-out' });
-    blazeWrong(st.streak > 0);
+    const sigh = st.streak > 0, tryOops = (bzs.oopsFlip = !bzs.oopsFlip); // oops about every other wrong pick
+    requestAnimationFrame(() => { if (!(tryOops && special('oops'))) blazeWrong(sigh); });
     const prev = st.streak; st.streak = 0; setStreak(0, prev);
     if (timeLeft(now) <= 0) endRound();
   }
