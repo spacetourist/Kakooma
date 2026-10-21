@@ -33,8 +33,8 @@ await tapEl('#mStart'); await waitPlay(); await wait(200);
 await tapEl(`.tile[data-i="${await wrong()}"]`); await wait(200);
 for (let k = 0; k < 6; k++) { await tapEl(`.tile[data-i="${await ans()}"]`); await wait(80); await waitPlay(); await wait(80); }
 await page.locator('#tray .chip').last().scrollIntoViewIfNeeded(); await tapEl('#tray .chip >> nth=-1'); await wait(100);
-const rph = await kk(() => window.__kk.phase); const st0 = await kk(() => window.__sfxLog.length); console.log('after chip tap:', rph); if (rph === 'replay') { await wait(300); await page.touchscreen.tap(206, 640); } await waitPlay();
-const skipLog = await kk(n => window.__sfxLog.slice(n).map(x => x[0]), st0); check(skipLog.includes('stopAll'), 'stopAll on skipping a chip replay');
+const rph = await kk(() => window.__kk.phase); const st0 = await kk(() => window.__sfxLog.length); console.log('after chip tap:', rph); if (rph === 'replay') { await wait(300); await page.touchscreen.tap(206, 640); } await wait(300); const rph2 = await kk(() => window.__kk.phase); await waitPlay();
+const skipLog = await kk(n => window.__sfxLog.slice(n).map(x => x[0]), st0); check(rph === 'replay' && rph2 === 'replay' && !skipLog.includes('stopAll'), `a tap during a chip replay does nothing: still replaying (${rph2}), plays in full (no stopAll)`);
 await page.waitForFunction(() => window.__kk.phase === 'done', null, { timeout: 20000 }); await wait(200);
 const g = await since();
 const names = g.map(x => x[0]), has = n => names.includes(n), t = n => g.find(x => x[0] === n)?.[1];

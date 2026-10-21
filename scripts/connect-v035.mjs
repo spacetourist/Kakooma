@@ -1,6 +1,6 @@
 // v0.3.5 connect beat + canvas confetti: node scripts/connect-v035.mjs [baseUrl]. Frozen-frame shots of the beat at
 // 0.15/0.35/0.6/0.9 s (Easy + Hard), a 50 ms frame sequence per level for GD, timing/state checks, link() once with no
-// partPop, timer paused, tap-to-skip, reduced motion, lazy confetti chunk, burst + shower shots, FPS @4x with taps
+// partPop, timer paused, taps during the beat do nothing (v0.3.6), reduced motion, lazy confetti chunk, burst + shower shots, FPS @4x with taps
 // during a shower. Shots shots/v035-connect-*.png, v035-confetti-*.png, sequences in shots/v035-seq/.
 import { createServer } from 'http';
 import { readFileSync, existsSync, statSync, mkdirSync } from 'fs';
@@ -49,9 +49,15 @@ async function at(t, shotPath) {
   for (let k = 0; k < 400 && (await kk(() => window.__shotAt)) == null; k++) await new Promise(r => setTimeout(r, 15)); // (page polling would sit in the frozen queue)
   const s = await kk(() => {
     const p = window.__kk.solved.at(-1), nums = p.nums, tiles = [...document.querySelectorAll('.tile')], iC = nums.indexOf(p.c), iS = nums.indexOf(Math.min(p.a, p.b)), iL = nums.indexOf(Math.max(p.a, p.b));
-    const cs = e => getComputedStyle(e), lines = [...document.querySelectorAll('#fx svg.connect line')];
+    const cs = e => getComputedStyle(e), lines = [...document.querySelectorAll('#board svg.connect line')];
     return { at: window.__shotAt, ans: { bg: cs(tiles[iC]).backgroundColor, tf: cs(tiles[iC]).transform }, S: cs(tiles[iS]).backgroundColor, L: cs(tiles[iL]).backgroundColor,
       dim: tiles.filter((_, k) => k < nums.length && ![iC, iS, iL].includes(k)).map(e => +cs(e).opacity),
+      // v0.3.6 layering: the line layer is in #board before the first slot (under every tile), the fx layer stays on top
+      under: (() => { const sv = document.querySelector('#board svg.connect'), sl = document.querySelector('#board .slot'); return !!sv && sv.parentElement.id === 'board' && !!(sv.compareDocumentPosition(sl) & Node.DOCUMENT_POSITION_FOLLOWING); })(),
+      hit: [iC, iS, iL].map(k => { const r = tiles[k].getBoundingClientRect(); const e = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return !!e && tiles[k].contains(e); }),
+      cunder: tiles.filter((_, k) => k < nums.length && ![iC, iS, iL].includes(k)).every(e => e.parentElement.classList.contains('cunder')),
+      ends: (() => { const sv = document.querySelector('#board svg.connect'); if (!sv) return null; const br = document.getElementById('board').getBoundingClientRect(), ctr = k => { const r = tiles[k].parentElement.getBoundingClientRect(); return [r.left + r.width / 2 - br.left, r.top + r.height / 2 - br.top]; };
+        const rA = tiles[iC].offsetWidth / 2; return { err: lines.map((l, j) => { const P = ctr(j ? iL : iS), A = ctr(iC); return Math.max(Math.abs(+l.getAttribute('x1') - P[0]), Math.abs(+l.getAttribute('y1') - P[1]), Math.abs(+l.getAttribute('x2') - A[0]), Math.abs(+l.getAttribute('y2') - A[1])); }), rA, rP: [iS, iL].map(k => tiles[k].offsetWidth / 2) }; })(),
       lines: lines.map(l => ({ c: cs(l).stroke, o: +cs(l).opacity, off: parseFloat(cs(l).strokeDashoffset), len: parseFloat(l.style.strokeDasharray), w: cs(l).strokeWidth, cap: cs(l).strokeLinecap })),
       sum: document.getElementById('sum').className, left: window.__kk.left, running: window.__kk.running,
       sfx: window.__sfxLog.filter(e => e[2] >= window.__tapT - 5).map(e => e[0]) };
@@ -61,6 +67,8 @@ async function at(t, shotPath) {
   await waitPlay();
   return s;
 }
+// fraction of the VISIBLE stretch drawn (v0.3.6: tip from 6 px inside the source edge to 6 px inside the answer's 1.08 edge)
+const vis = (q, j) => { const l = q.lines[j], s0 = q.ends.rP[j] - 6, e0 = l.len - (q.ends.rA * 1.08 - 6); return (l.len - l.off - s0) / (e0 - s0); };
 const scale = tf => { const m = /matrix\(([-\d.]+)/.exec(tf); return m ? +(+m[1]).toFixed(3) : 1; };
 const PZ = { easy: [{ nums: [3, 7, 10, 2, 9], a: 3, b: 7, answer: 10 }], hard: [{ nums: [24, 26, 50, 9, 31], a: 24, b: 26, answer: 50 }] };
 /** the queue applies to the NEXT board: play the current board through so the live one is the known puzzle */
@@ -75,21 +83,27 @@ for (const lv of ['easy', 'hard']) {
   log.push(`     ${lv}: ` + JSON.stringify({ 600: s3 }));
   check(s1.ans.bg === GR && Math.abs(scale(s1.ans.tf) - 1.08) < 0.02 && s1.dim.every(o => Math.abs(o - 0.4) < 0.05), `${lv} 0.15 s: answer green at ${scale(s1.ans.tf)}, others at ${s1.dim} opacity`);
   check(s1.lines.length === 2 && s1.lines.every(l => l.o > 0 && l.off > 0.5 * l.len) && s1.S !== 'rgb(255, 255, 255)' && s1.L !== 'rgb(255, 255, 255)' && s2.S === LB && s2.L === DB, `${lv} 0.15-0.35 s: parts light up (#9cc0ff / #3a7bff), both lines just started ${JSON.stringify(s1.lines.map(l => [l.o, Math.round(l.off)]))}`);
-  check(s2.lines.every(l => l.off > 0 && l.off < l.len) && Math.abs(s2.lines[0].off / s2.lines[0].len - s2.lines[1].off / s2.lines[1].len) < 0.02 && /ph|hint/.test(s2.sum), `${lv} 0.35 s: both lines mid-draw at the same fraction (arrive together), sum strip not yet filled`);
+  check(s2.lines.every(l => l.off > 0 && l.off < l.len) && Math.abs(vis(s2, 0) - vis(s2, 1)) < 0.02 && /ph|hint/.test(s2.sum), `${lv} 0.35 s: both lines mid-draw at the same visible fraction (${vis(s2, 0).toFixed(3)} / ${vis(s2, 1).toFixed(3)}: arrive together), sum strip not yet filled`);
   check(s2.lines[0].c === LB && s2.lines[1].c === DB && s2.lines.every(l => l.w === '10px' && l.cap === 'round'), `${lv}: thick round-ended lines in the part colours`);
-  check(s3.lines.every(l => l.off === 0 && l.o === 1) && /pop/.test(s3.sum) && scale(s3.ans.tf) > 1.08, `${lv} 0.6 s: lines joined, soft pulse (${scale(s3.ans.tf)}), sum strip filled`);
+  check([s1, s2, s3].every(s => s.under && s.hit.every(Boolean) && s.cunder), `${lv}: lines on a layer UNDER all the tiles (answer + both parts on top at their centres; dimmed slots keep an opaque disc)`);
+  check([s1, s2, s3].every(s => s.ends && s.ends.err.every(e => e < 1)), `${lv}: each line runs centre to centre (max end error ${Math.max(...s1.ends.err).toFixed(2)} px)`);
+  check(s1.lines.every((l, j) => l.len - l.off <= s1.ends.rP[j] + 1), `${lv} 0.15 s: the drawn tip has only just left the source circle (${s1.lines.map((l, j) => (l.len - l.off - s1.ends.rP[j]).toFixed(1))} px past its edge)`);
+  check(s3.lines.every(l => l.off > 0 && l.off <= s3.ends.rA * 1.08 && l.off >= s3.ends.rA * 1.08 - 8) && /pop/.test(s3.sum) && scale(s3.ans.tf) > 1.08, `${lv} 0.6 s: lines joined, soft pulse (${scale(s3.ans.tf)}), sum strip filled`);
   check(s4.lines.every(l => l.o < 1 && l.o > 0) && s4.dim.every(o => o > 0.4), `${lv} 0.9 s: lines + dimming fading out (${s4.lines.map(l => l.o.toFixed(2))}, ${s4.dim.map(o => o.toFixed(2))})`);
   check([s1, s2, s3, s4].every(s => !s.running), `${lv}: round timer paused through the beat`);
   const sx = s4.sfx; check(sx.filter(x => x === 'link').length === 1 && !sx.includes('partPop'), `${lv}: link() once, no partPop in the reveal (${sx.join(',')})`);
   const lk = await kk(() => { const e = window.__sfxLog.filter(e => e[0] === 'link').at(-1), c = window.__sfxLog.filter(e => e[0] === 'correct').at(-1); return Math.round(e[2] - c[2]); });
   check(Math.abs(lk - 100) <= 20, `${lv}: link() scheduled 0.1 s after the tap (${lk} ms after correct())`);
+  // v0.3.6 shots: the lines under the tiles at 0.3 / 0.5 / 0.7 s into the beat
+  if (lv === 'easy') for (const t of [300, 500, 700]) { await known(lv); const q = await at(t, `${SHOTS}v036-lines-under-${String(t).padStart(4, '0')}.png`);
+    check(q.under && q.hit.every(Boolean), `shot v036-lines-under-${t}: lines under the tiles (at ${q.at} ms; tips ${q.lines.map(l => Math.round(l.len - l.off)).join('/')} of ${q.lines.map(l => Math.round(l.len)).join('/')} px)`); }
   // handover at 1.0 s
-  await known(lv); await tapAnswer(); const t0 = Date.now(); await page.waitForFunction(() => window.__kk.phase === 'play' && !document.querySelector('#fx svg.connect'), null, { timeout: 3000 }); const ho = Date.now() - t0;
+  await known(lv); await tapAnswer(); const t0 = Date.now(); await page.waitForFunction(() => window.__kk.phase === 'play' && !document.querySelector('#board svg.connect'), null, { timeout: 3000 }); const ho = Date.now() - t0;
   check(ho > 850 && ho < 1300, `${lv}: next puzzle ${ho} ms after the tap`);
   // frame sequence for GD
   if (!NOSEQ) { for (let t = 0; t <= 1000; t += 50) { await known(lv); await at(t, `${SEQ}${lv}-${String(t).padStart(4, '0')}.png`); await wait(150); } }
 }
-// ---------- full lesson handover, skip, reduced ----------
+// ---------- full lesson handover, no skip, reduced ----------
 await open('?round=600&level=medium&teach=full');
 await queue([{ nums: [7, 9, 12, 19, 4], a: 7, b: 12, answer: 19 }]); await tapEl('#mStart'); await waitPlay(); await wait(300);
 await tapAnswer(); const tf = Date.now();
@@ -98,10 +112,15 @@ check(tfly > 850 && tfly < 1300, `full lesson: counting starts after the beat ($
 await page.waitForFunction(() => window.__kk.teachStage === 'cheer', null, { timeout: 15000, polling: 10 });
 for (let k = 0; k < 8; k++) { await page.screenshot({ path: `${SEQ}burst-${k}.png` }); if (k === 2) await page.screenshot({ path: `${SHOTS}${TAG}-confetti-burst.png` }); await wait(100); }
 await waitPlay(); await wait(300);
-// tap during the beat skips it (and the lesson)
-await queue([{ nums: [7, 9, 12, 19, 4], a: 7, b: 12, answer: 19 }]); await tapAnswer(); await wait(300); await page.touchscreen.tap(200, 700);
-const sk = Date.now(); await waitPlay(2000); const skipMs = Date.now() - sk;
-check(skipMs < 250 && (await kk(() => !document.querySelector('#fx svg.connect') && window.__kk.teachStage === '')), `tap during the beat skips it straight to the next puzzle (${skipMs} ms)`);
+// v0.3.6: taps during the beat (on the board, on a dimmed tile, on the answer again) do nothing: it plays in full and
+// the lesson follows as usual
+await queue([{ nums: [7, 9, 12, 19, 4], a: 7, b: 12, answer: 19 }]); await tapAnswer(); const tb = Date.now(); await wait(300);
+const sc0 = await kk(() => window.__kk.score);
+await page.touchscreen.tap(200, 700); await tapEl('.tile[data-i="4"]'); await tapAnswer(); await wait(100);
+const mid = await kk(() => ({ svg: !!document.querySelector('#board svg.connect'), stage: window.__kk.teachStage, score: window.__kk.score, miss: window.__kk.miss }));
+await page.waitForFunction(() => window.__kk.teachStage === 'fly', null, { timeout: 3000 }); const tfly2 = Date.now() - tb;
+check(mid.svg && mid.stage === 'connect' && mid.score === sc0 && mid.miss === 0 && tfly2 > 850, `taps during the beat do nothing: beat still running after 3 taps (${mid.stage}), score ${mid.score}, no miss, lesson counting at ${tfly2} ms`);
+await waitPlay(20000);
 // shower (streak 3) + taps while it falls, @4x CPU
 await open('?round=600&level=medium&teach=quick');
 const loadAt = await kk(() => performance.getEntriesByType('navigation')[0].loadEventEnd), chunk = await kk(() => performance.getEntriesByType('resource').filter(e => /confetti/.test(e.name)).map(e => Math.round(e.startTime)));

@@ -1,7 +1,7 @@
 /**
  * Full teaching solve (v0.2, GD storyboard v2): parts burst into counters that fly into ten-frames at the board
  * centre, counters hop across to make a ten (captions), everything flows into the answer, then a part-whole bond
- * draws itself with confetti. Transforms + WAAPI only. teach() returns { done, skip }: skip() ends it at once.
+ * draws itself with confetti. Transforms + WAAPI only. teach() returns { done, cancel }: cancel() ends it at once (quit / round end only; v0.3.6 has no tap-to-skip).
  */
 import { planTeach, countTiming, type Plan, type Pace } from './plan';
 import { confetti, shower, reducedMotion } from './fx';
@@ -19,7 +19,7 @@ export interface TeachCtx {
   big?: boolean;                 // v0.3.5.1: streak 3/5/10 or a new #1: the star shower replaces the bond burst
   onShower?: () => void;         // v0.3.5.2: called on the frame the shower's first burst fires (the deferred streak sound)
 }
-export interface TeachRun { done: Promise<void>; skip: () => void; plan: Plan }
+export interface TeachRun { done: Promise<void>; cancel: () => void; plan: Plan }
 
 const T = (x: number, y: number, s = 1) => `translate(${x.toFixed(1)}px,${y.toFixed(1)}px) scale(${s})`;
 
@@ -35,7 +35,7 @@ export function teach(ctx: TeachCtx, a: number, b: number): TeachRun {
   const inMs = (ms: number) => ({ delay: Math.max(0, ms) / 1000 });
   const wait = (ms: number) => new Promise<boolean>(r => setTimeout(() => r(over), ms));
   const dim = (idx: number[] | 'all' | 'none') => ctx.tiles.forEach((t, i) => t.classList.toggle('dim', idx === 'all' || (Array.isArray(idx) && idx.includes(i))));
-  /** cut = the lesson was cut short (skip, quit, round end): stop any sounds already scheduled on the audio clock */
+  /** cut = the lesson was cut short (quit, round end): stop any sounds already scheduled on the audio clock */
   const finish = (cut = true) => { if (over) return; over = true; if (cut) stopAll(); for (const x of anims) x.cancel(); for (const e of els) e.remove(); dim('none'); resolve(); };
 
   // ---------- geometry: every frame full size; up to 3 per row, rows stack ----------
@@ -60,7 +60,7 @@ export function teach(ctx: TeachCtx, a: number, b: number): TeachRun {
   // [smaller source 80] 12 [counter 120] 12 [larger source 80] (304 px, fits 360 px); the dots launch from the sources
   const lastBottom = rowY[nRows - 1] + fh / 2, CAPH = 46;
   const capY = lastBottom + 10;
-  const K = Math.max(1.05, Math.min(120 / 72, (h - lastBottom - CAPH - 24) / 72)); // counter ~120 px, clear of the "Tap to skip" hint
+  const K = Math.max(1.05, Math.min(120 / 72, (h - lastBottom - CAPH - 24) / 72)); // counter ~120 px
   const C = { x: w / 2, y: lastBottom + CAPH + 36 * K };
   const A = { x: w / 2, y: h - 46 }; // the answer node's home box; it is shown at C (scale K) and rises from there to the bond's whole
   const SB = Math.round(Math.min(72 * K, Math.max(72, 80 * (72 * K) / 120))), // 80 next to a 120 counter; never under 72 (or taller than the counter)
@@ -94,8 +94,6 @@ export function teach(ctx: TeachCtx, a: number, b: number): TeachRun {
   });
   const ans = add(document.createElement('div')); ans.className = 'bnode whole counting'; ans.textContent = '0';
   ans.style.width = ans.style.height = '72px'; ans.style.left = A.x - 36 + 'px'; ans.style.top = A.y - 36 + 'px'; ans.style.opacity = '0'; ans.style.zIndex = '2'; ans.dataset.rest = `${C.x.toFixed(1)},${C.y.toFixed(1)},${(72 * K).toFixed(1)}`; // the counter's resting box (tests)
-  const skipHint = add(document.createElement('div')); skipHint.className = 'skiphint'; skipHint.textContent = 'Tap to skip';
-  anim(skipHint, [{ opacity: 0 }, { opacity: 1 }], { duration: 200, delay: 400, fill: 'both' });
 
   const fadeIn = (e: Element, ms = 220, delay = 0, dy = 6) => anim(e, [{ opacity: 0, translate: `0 ${dy}px` }, { opacity: 1, translate: '0 0' }], { duration: ms, delay, fill: 'both', easing: 'ease-out' });
   const later = (ms: number, f: () => void) => setTimeout(() => { if (!over) f(); }, ms);
@@ -270,5 +268,5 @@ export function teach(ctx: TeachCtx, a: number, b: number): TeachRun {
     if (await wait(CLEAR)) return;
     finish(false);
   })();
-  return { done, skip: finish, plan };
+  return { done, cancel: finish, plan };
 }

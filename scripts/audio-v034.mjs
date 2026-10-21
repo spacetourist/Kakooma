@@ -1,5 +1,5 @@
 // v0.3.4 sound pack wiring: node scripts/audio-v034.mjs [baseUrl]. Unlock on first gesture (nothing before), Opus in Chromium,
-// AAC fallback (corrupt .ogg) and the AAC path (no Opus support), kk_sfx.* fetched with 200, stopAll on skip cancels sounds
+// AAC fallback (corrupt .ogg) and the AAC path (no Opus support), kk_sfx.* fetched with 200, stopAll on quit cancels sounds
 // scheduled ahead, mute toggle (saved, silences everything, uiTap only on unmute), console errors. Shots v034-mute-on/off.png.
 // Chrome runs with --autoplay-policy=user-gesture-required, i.e. the real-browser rule (headless otherwise allows autoplay).
 import { createServer } from 'http';
@@ -53,7 +53,7 @@ check(u1.state === 'running' && u1.s[0] === 1, `first gesture unlocks: context $
 await tapEl('#levels [data-lv="medium"]'); await wait(200);
 const u2 = await kk(() => window.__au.starts.filter(x => x.len > 1).length);
 check(u2 >= 1, `after the unlock a level tap plays uiTap (${u2} real sound(s) so far)`);
-// skip during the bond stage: pulses/partPops are scheduled ahead with { delay }; stopAll must cancel them all
+// v0.3.6 (no tap-to-skip): Quit during the bond stage; pulses/partPops are scheduled ahead with { delay }; stopAll must cancel them all
 await kk(() => { const p = { nums: [7, 12, 19, 4, 2], a: 7, b: 12, answer: 19 }; window.__kkNext = [p, p]; });
 await tapEl('#mStart'); await page.waitForFunction(() => window.__kk.phase === 'play'); await wait(400);
 const nStart = await kk(() => window.__au.starts.length);
@@ -62,16 +62,16 @@ await tapEl(`.tile[data-i="${i}"]`);
 await page.waitForFunction(() => window.__kk.teachStage === 'bond', null, { timeout: 15000 }); await wait(150);
 const atSkip = await kk(() => window.__kkAudio.diag && (window.__au.ctxNow = null, null));
 const before = await kk(() => { const c = window.__au.starts; return { n: c.length }; });
-await page.touchscreen.tap(195, 600);
-await page.waitForFunction(() => window.__kk.phase === 'play', null, { timeout: 2000 }); await wait(150);
+await tapEl('#gQuit');
+await page.waitForFunction(() => document.getElementById('play').dataset.mode === 'menu', null, { timeout: 2000 }); await wait(150);
 const sk = await kk(n0 => { const s = window.__au.starts.slice(n0), log = window.__sfxLog || [];
   const stopAt = s.map(x => x.stop).filter(Boolean).map(x => x.now); const tSkip = Math.min(...(stopAt.length ? stopAt : [Infinity]));
   const ahead = s.filter(x => x.when > tSkip + 0.01), playing = s.filter(x => x.when <= tSkip && x.when + (x.dur ?? 0) > tSkip);
   return { lesson: s.filter(x => x.len > 1).length, tSkip, ahead: ahead.length, aheadStopped: ahead.filter(x => x.stop && x.stop.when <= tSkip + 0.1).length, playing: playing.length, playingStopped: playing.filter(x => x.stop && x.stop.when <= tSkip + 0.1).length }; }, nStart);
 info.skip = sk;
-check(sk.lesson >= 19 && sk.ahead >= 3 && sk.aheadStopped === sk.ahead && sk.playingStopped === sk.playing, `skip in the bond stage: stopAll cancels ${sk.aheadStopped}/${sk.ahead} sounds scheduled ahead and ${sk.playingStopped}/${sk.playing} still playing, within 100 ms (${sk.lesson} lesson sounds had started)`);
+check(sk.lesson >= 19 && sk.ahead >= 3 && sk.aheadStopped === sk.ahead && sk.playingStopped === sk.playing, `quit in the bond stage: stopAll cancels ${sk.aheadStopped}/${sk.ahead} sounds scheduled ahead and ${sk.playingStopped}/${sk.playing} still playing, within 100 ms (${sk.lesson} lesson sounds had started)`);
 // mute
-await tapEl('#gQuit'); await page.waitForFunction(() => document.getElementById('play').dataset.mode === 'menu'); await wait(500);
+await wait(350); // (already on the menu: the quit above)
 await page.screenshot({ path: `${SHOTS}${TAG}-mute-on.png` });
 const m0 = await kk(() => window.__au.starts.length);
 await tapEl('#mMute'); await wait(300);

@@ -79,7 +79,7 @@ async function sumAt(base, shot) {
   await open(base, '?round=600&level=easy&teach=quick');
   await tapEl('#mStart'); await waitPlay(); await wait(300); await tapAnswer(); await wait(1200); await waitPlay(); await wait(200);
   await tapAnswer(); const t = await untilMs('__tapT', 950);
-  const s = await kk(() => ({ cls: document.getElementById('sum').className, text: document.getElementById('sum').textContent, lines: document.querySelectorAll('#fx svg.connect line').length }));
+  const s = await kk(() => ({ cls: document.getElementById('sum').className, text: document.getElementById('sum').textContent, lines: document.querySelectorAll('#board svg.connect line').length }));
   const b = await page.locator('#board').boundingBox(), sb = await page.locator('#sum').boundingBox();
   await page.screenshot({ path: shot, clip: { x: 0, y: b.y - 10, width: 390, height: sb.y + sb.height - b.y + 20 } });
   return { t, ...s };

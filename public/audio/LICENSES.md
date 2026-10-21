@@ -1,4 +1,4 @@
-# Kakooma sound pack v02 / v02b: sources and licences
+# Kakooma sound pack v02 / v02b / v02c / v03: sources and licences
 
 Every sound in `dist/kk_sfx.ogg` / `dist/kk_sfx.m4a` is built only from the recordings below, and **all of them are CC0 1.0**
 (public domain dedication). No attribution is needed, but credits are listed anyway. Nothing used needs a sign-up or payment
@@ -30,8 +30,16 @@ tuned to C5) and #10 (VSCO-2-CE pizzicato C5 and A5 → C6). All are CC0 and alr
 **v02c:** `total` uses no new files either: pops from #1 (benniknop 317848, bloops), #2 (justamudkip 842794), #3/#4 (mouth plops)
 and #6-#8 (water blips for the fizz), plus #10 (VSCO-2-CE pizzicato). All are CC0 and listed above.
 
+**v03:** the Blaze reactions and `link` use **no new files**. Everything is processed from recordings already listed above, all CC0:
+- **Blaze "voice" (bubble trills and chirps):** #3 CapsLok 181907 and #4 qubodup 188797 (mouth plops: cheer, oops, think, clap,
+  thumbs); #1 benniknop 317848 and #2 justamudkip 842794 (bloops: thumbs, whoa).
+- **Fizz sparkles in cheer/whoa:** #6 giddster 387952 and #7 C-V 515919.
+- **`link`:** bloops from #1, #2, #4 and #5 (ScratchnSniff 242113), a plop from #3/#4, blips from #6/#7, and #10 VSCO-2-CE pizzicato.
+
+No synthesised layer was added.
+
 Freesound files are the site's HQ previews (OGG ~192 kb/s, or MP3 for a few), not the original uploads. That's plenty for
-pops this short, which are then encoded at 36 kb/s Opus anyway.
+pops this short, which are then encoded at 36 kb/s Opus anyway (43 kb/s constrained in v03).
 
 **Removed since v01** (no longer in the mix): VSCO xylophone, glockenspiel, tubular bell, triangle, bell tree, wind chimes, slit drum
 and wood clicks; Kenney interface drop / RPG page-flip / cloth; OGA plop and paper; Freesound #683101 woosh.

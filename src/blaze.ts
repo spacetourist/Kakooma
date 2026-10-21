@@ -84,7 +84,7 @@ export function blazeCtl(body: HTMLElement, root: HTMLElement): BlazeCtl {
     const url = ready.get(p); if (!url) return false;
     clear();
     pose.src = url; pose.hidden = false; base.style.visibility = 'hidden'; body.dataset.pose = p; cur = p;
-    sfx.blaze(p); // same frame the pose swaps in (silent stub until the AE's sounds are approved)
+    sfx.blaze(p); // same frame the pose swaps in (the pack adds its 100 ms offset itself)
     L.push([p, Math.round(performance.now())]);
     if (!reducedMotion()) {
       const m = MOTION[p];

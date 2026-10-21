@@ -118,17 +118,19 @@ const c2 = await caps(); check(c2.join('|') === '2 + 5 = 7' && (await kk(() => d
 await stage('cheer'); await wait(250); await shot('09-under10-bond');
 await waitPlay();
 
-// ---------- skip ----------
+// ---------- no tap-to-skip (v0.3.6) ----------
 await wait(300); await tapTile(await answerIdx()); await stage('fly'); await wait(300);
 const sk = await clock(); check(sk.phase === 'feedback' && !sk.running, 'third solve is a full teaching solve');
 await shot('10-skip-before');
 await kk(() => { window.__sfxLog = []; });
-const t0 = Date.now(); await tapAnywhere();
-await waitPlay(2000); const skipMs = Date.now() - t0;
-const sk2 = await kk(() => ({ fx: document.querySelectorAll('#fx .ctr, #fx .tf, #fx .bnode').length, dim: document.querySelectorAll('.tile.dim').length, skipper: document.getElementById('skipper').classList.contains('hidden'), running: window.__kk.running }));
-check(skipMs < 400 && sk2.fx === 0 && sk2.dim === 0 && sk2.skipper && sk2.running, `tap to skip: next board live in ${skipMs} ms (incl. test round-trip), overlay cleared, timer running`);
-check((await kk(() => window.__kk.score)) === 3, 'skip tap did not land on the new board');
-check(await kk(() => window.__sfxLog.some(([n]) => n === 'stopAll')), 'tap-to-skip calls stopAll() (scheduled lesson sounds cut)');
+await tapAnywhere(); await wait(400);
+const sk1 = await kk(() => ({ fx: document.querySelectorAll('#fx .ctr, #fx .tf, #fx .bnode').length, phase: window.__kk.phase, running: window.__kk.running, teach: !!window.__kk.teach, skipper: !!document.getElementById('skipper') }));
+check(sk1.fx > 0 && sk1.phase === 'feedback' && !sk1.running && sk1.teach && !sk1.skipper, `a tap during the lesson does nothing: lesson still on screen (${sk1.fx} parts), timer still paused, no skip overlay in the DOM`);
+await waitPlay(20000); await wait(100);
+const sk2 = await kk(() => ({ fx: document.querySelectorAll('#fx .ctr, #fx .tf, #fx .bnode').length, dim: document.querySelectorAll('.tile.dim').length, running: window.__kk.running }));
+check(sk2.fx === 0 && sk2.dim === 0 && sk2.running, `after the full lesson: overlay cleared, timer running`);
+check((await kk(() => window.__kk.score)) === 3, 'the tap during the lesson did not land on the new board');
+check(!(await kk(() => window.__sfxLog.some(([n]) => n === 'stopAll'))), 'lesson not cut (no stopAll)');
 await kk(() => { window.__sfxLog = null; });
 await shot('11-skip-after');
 

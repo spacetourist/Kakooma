@@ -76,6 +76,9 @@ button { font: inherit; color: inherit; border: 0; background: none; padding: 0;
 /* v0.3.5 connect beat: parts light up in their own colours, everything else dims to 40 % (0.15 s in and out) */
 .tile.add.cs { background: var(--lblue); } .tile.add.cl { background: var(--blue); }
 .tile.cdim { opacity: .4; transition: opacity .15s; }
+/* v0.3.6: the bond lines run under the tiles; a dimmed tile's slot gets an opaque board-colour disc so the 40 % tile looks
+   exactly as before and a line passing beneath it never shows through */
+.slot.cunder { border-radius: 50%; background: var(--bg); }
 .tile.bad { box-shadow: 0 0 0 3px var(--coral), var(--shadow); color: var(--coral); }
 .prompt { margin: 6px 0 0; text-align: center; font: 700 15px/1.3 var(--f-ui); color: var(--muted); }
 
@@ -238,12 +241,10 @@ button { font: inherit; color: inherit; border: 0; background: none; padding: 0;
 .fx .srcb.drained { box-shadow: inset 0 0 0 3px currentColor; } .fx .srcb.drained .fill { display: none; }
 .fx .srcb.p0.drained { color: #5287ea; } .fx .srcb.p1.drained { color: var(--blue); }
 .bondlines { width: 100%; height: 100%; overflow: visible; }
-.connect { width: 100%; height: 100%; overflow: visible; }
+.connect { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
 .connect line { stroke-width: 10; stroke-linecap: round; fill: none; }
 .connect line.cs { stroke: var(--lblue); } .connect line.cl { stroke: var(--blue); }
 .bondlines line, .labbond line { stroke: var(--line); stroke-width: 4; stroke-linecap: round; }
-.fx .skiphint { top: auto; bottom: 0; left: 0; right: 0; text-align: center; font: 800 11px/1 var(--f-ui); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
-.skipper { position: fixed; inset: 0; z-index: 40; background: transparent; touch-action: none; }
 .tray-cap { flex: 0 0 auto; margin-top: 2px; text-align: center; font: 700 13px/1.2 var(--f-ui); color: var(--muted); }
 button.chip { cursor: pointer; touch-action: manipulation; }
 .chip.playing { box-shadow: 0 0 0 2px var(--blue); }

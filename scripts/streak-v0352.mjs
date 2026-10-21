@@ -26,13 +26,13 @@ const kk = (f, a) => page.evaluate(f, a), wait = ms => page.waitForTimeout(ms);
 async function tapEl(sel) { const bb = await page.locator(sel).first().boundingBox(); await page.touchscreen.tap(bb.x + bb.width / 2, bb.y + bb.height / 2); }
 const waitPlay = (t = 20000) => page.waitForFunction(() => window.__kk.phase === 'play', null, { timeout: t });
 const tapAnswer = async () => { const i = await kk(() => window.__kk.puzzle.nums.indexOf(window.__kk.puzzle.answer)); await tapEl(`.tile[data-i="${i}"]`); };
-/** play to streak `to`, skipping lessons (after their beat), then return the timing for the last solve */
-async function playTo(to, skipLessons) {
+/** play to streak `to` (lessons always play in full since v0.3.6: waitPlay waits them out), then time the last solve */
+async function playTo(to) {
   for (let s = 1; s <= to; s++) {
     await waitPlay(); await wait(150);
     if (s === to) await kk(() => { window.__sfxLog.length = 0; (window.__kkConfetti || []).length = 0; });
     await tapAnswer();
-    if (s < to) { await wait(1150); if (skipLessons && await kk(() => window.__kk.teach != null)) await tapEl('#skipper'); }
+    if (s < to) await wait(1150);
   }
   await wait(4200); // long enough for a lesson's shower (bond at ~+6-8 s handled below) or the held-board shower
 }
@@ -40,43 +40,46 @@ const timing = () => kk(() => { const t0 = window.__tapT, L = window.__sfxLog, c
   const at = n => { const e = L.find(e => e[0] === n); return e ? Math.round(e[2] - t0) : null; };
   const ch = L.find(e => e[0] === 'blaze' && e[3] === 'cheer');
   return { branch: !!window.__kkReact, cheer: ch ? Math.round(ch[2] - t0) : null, correct: at('correct'), streak: at('streak'), streakN: (L.find(e => e[0] === 'streak') || [])[1], shower1: c.find(e => /^shower/.test(e[0])) ? Math.round(c.find(e => /^shower/.test(e[0]))[1] - t0) : null, stage: window.__kk.teachStage }; });
+// (streak(n) and Blaze's cheer run in the same synchronous task as the first burst, just before it is fired + logged;
+//  the cheer swap costs ~1-2 ms, hence a 3 ms tolerance)
 // A: x5 in the lesson (default teach: milestone -> full lesson; shower at the bond)
 await open('?round=600&level=easy');
-await tapEl('#mStart'); await playTo(5, true);
+await tapEl('#mStart'); await playTo(5);
 await page.waitForFunction(() => (window.__kkConfetti || []).some(e => /^shower/.test(e[0])), null, { timeout: 15000 });
 let a = await timing();
-check(a.correct < 20 && a.streakN?.[0] === 5 && a.shower1 > 1000 && Math.abs(a.streak - a.shower1) <= 1, `x5 lesson: correct at +${a.correct} ms (tap), shower's first burst at +${a.shower1} ms, streak(5) at +${a.streak} ms (same tick)`);
+check(a.correct < 20 && a.streakN?.[0] === 5 && a.shower1 > 1000 && Math.abs(a.streak - a.shower1) <= 3, `x5 lesson: correct at +${a.correct} ms (tap), shower's first burst at +${a.shower1} ms, streak(5) at +${a.streak} ms (same tick)`);
 if (a.branch) check(Math.abs(a.cheer - a.streak) <= 1, `x5 lesson: blaze('cheer') + pose swap at +${a.cheer} ms, with streak(5)`);
 // B: x5 / x10 with no lesson (teach=quick): the held-board shower at 0.5 s
 await open('?round=600&level=easy&teach=quick');
-await tapEl('#mStart'); await playTo(5, false);
+await tapEl('#mStart'); await playTo(5);
 let b = await timing();
-check(b.correct < 20 && b.streakN?.[0] === 5 && Math.abs(b.shower1 - 500) < 60 && Math.abs(b.streak - b.shower1) <= 1, `x5 no lesson: correct at +${b.correct} ms, shower's first burst at +${b.shower1} ms, streak(5) at +${b.streak} ms`);
+check(b.correct < 20 && b.streakN?.[0] === 5 && Math.abs(b.shower1 - 500) < 60 && Math.abs(b.streak - b.shower1) <= 3, `x5 no lesson: correct at +${b.correct} ms, shower's first burst at +${b.shower1} ms, streak(5) at +${b.streak} ms`);
 if (b.branch) check(Math.abs(b.cheer - b.streak) <= 1, `x5 held board: blaze('cheer') + pose swap at +${b.cheer} ms, with streak(5)`);
-await playTo(5, false); // streak 10
+await playTo(5); // streak 10
 let b10 = await timing();
-check(b10.streakN?.[0] === 10 && Math.abs(b10.streak - b10.shower1) <= 1, `x10 no lesson: shower's first burst at +${b10.shower1} ms, streak(10) at +${b10.streak} ms`);
+check(b10.streakN?.[0] === 10 && Math.abs(b10.streak - b10.shower1) <= 3, `x10 no lesson: shower's first burst at +${b10.shower1} ms, streak(10) at +${b10.streak} ms`);
 if (b10.branch) check(Math.abs(b10.cheer - b10.streak) <= 1, `x10 held board: blaze('cheer') at +${b10.cheer} ms, with streak(10)`);
 // C: x20 (no shower): streak stays on the tap
-await playTo(10, false);
+await playTo(10);
 let c = await timing();
 check(c.streakN?.[0] === 20 && c.shower1 === null && c.streak < 20 && c.correct < 20, `x20 (no shower): correct at +${c.correct} ms, streak(20) at +${c.streak} ms (unchanged, on the tap)`);
 // D: reduced motion: no shower, streak(5) on the tap
 await open('?round=600&level=easy&teach=quick', true);
-await tapEl('#mStart'); await playTo(5, false);
+await tapEl('#mStart'); await playTo(5);
 let d = await timing();
 check(d.streakN?.[0] === 5 && d.streak < 20 && d.shower1 === null, `reduced motion x5: no shower, streak(5) on the tap (+${d.streak} ms)`);
 if (d.branch) check(d.cheer !== null && d.cheer < 40, `reduced motion x5: cheer stays at its old moment, the frame after the tap (+${d.cheer} ms)`);
-// E: lesson skipped before its bond: the deferred streak plays at the next board instead of being lost
+// E (v0.3.6, no tap-to-skip): taps all through the x5 lesson change nothing: streak(5) + cheer still fire once, together,
+// on the shower's first burst inside the lesson, and the lesson runs to its end
 await open('?round=600&level=easy');
 await tapEl('#mStart');
-for (let s = 1; s <= 5; s++) { await waitPlay(); await wait(150); if (s === 5) await kk(() => { window.__sfxLog.length = 0; }); await tapAnswer(); await wait(1150); if (await kk(() => window.__kk.teach != null)) await tapEl('#skipper'); }
+for (let s = 1; s <= 5; s++) { await waitPlay(); await wait(150); if (s === 5) await kk(() => { window.__sfxLog.length = 0; (window.__kkConfetti || []).length = 0; window.__e0 = performance.now(); /* the app stamps __tapT on every tap, ignored ones too */ }); await tapAnswer(); if (s === 5) for (let k = 0; k < 12; k++) { await wait(500); await page.touchscreen.tap(195, 600); } }
 await waitPlay(); await wait(200);
-const e = await kk(() => window.__sfxLog.filter(e => e[0] === 'streak').map(e => e[1]));
-check(e.length === 1 && e[0][0] === 5, `x5 lesson skipped before the bond: streak(5) still plays once, at the next board (${JSON.stringify(e)})`);
+const e = await kk(() => ({ s: window.__sfxLog.filter(e => e[0] === 'streak').map(e => [e[1][0], Math.round(e[2] - window.__e0)]), sh: (window.__kkConfetti || []).filter(e => /^shower/.test(e[0])).map(e => Math.round(e[1] - window.__e0))[0], stop: window.__sfxLog.some(e => e[0] === 'stopAll'), score: window.__kk.score }));
+check(e.s.length === 1 && e.s[0][0] === 5 && Math.abs(e.s[0][1] - e.sh) <= 1 && !e.stop && e.score === 5, `x5 lesson tapped 12x: not skipped (no stopAll), streak(5) once at +${e.s[0]?.[1]} ms on the shower (+${e.sh} ms), score ${e.score}`);
 if (await kk(() => !!window.__kkReact)) {
   const f = await kk(() => { const s = window.__sfxLog.find(e => e[0] === 'streak'), c = window.__sfxLog.find(e => e[0] === 'blaze' && e[3] === 'cheer'); return { s: s && Math.round(s[2]), c: c && Math.round(c[2]), n: window.__sfxLog.filter(e => e[0] === 'blaze' && e[3] === 'cheer').length }; });
-  check(f.n === 1 && Math.abs(f.c - f.s) <= 1, `x5 lesson skipped: cheer fires once, with the deferred streak(5), as the next board appears (${JSON.stringify(f)})`);
+  check(f.n === 1 && Math.abs(f.c - f.s) <= 1, `x5 lesson tapped: cheer fires once, with streak(5) (${JSON.stringify(f)})`);
   // round ends while the cheer is pending: dropped
   // (held board, no lesson: Quit is reachable during the beat; the shower would start at +0.5 s)
   await open('?round=600&level=easy&teach=quick');

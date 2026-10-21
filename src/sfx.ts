@@ -1,5 +1,5 @@
 /**
- * Sound hooks (v0.3.4): the Audio Engineer's pack (src/kkaudio.ts, sound pack v02c), wired in. Every existing
+ * Sound hooks (v0.3.4): the Audio Engineer's pack (src/kkaudio.ts, sound pack v03 since v0.3.6), wired in. Every existing
  * `import { sfx } from './sfx'` keeps working. This thin layer adds three things on top of the pack:
  *  - the mute setting (saved in localStorage 'kk.mute'): muting goes through the same path as stopAll() (everything
  *    playing or scheduled fades out) and every later hook is ignored while muted;
@@ -20,26 +20,27 @@ const log = (name: string, args: unknown[]) => {
   const o = args.find(a => a && typeof a === 'object') as Opts;
   L.push([name, args.filter(a => typeof a === 'number'), performance.now() + (o?.delay ?? 0) * 1000]);
 };
-/** v0.3.5: Blaze's poses. ONE hook for all of them, fired on the frame the pose swaps in. */
-export type BlazePose = 'cheer' | 'thumbs' | 'oops' | 'clap' | 'think' | 'whoa';
-type Hooks = typeof kk.sfx & { link(o?: kk.PlayOpts): void; blaze(pose: BlazePose): void };
-/** the game hooks: logged, then played by the pack unless muted */
+/** v0.3.6: Blaze's poses (sound pack v03). ONE hook for all of them, fired on the frame the pose swaps in. */
+export type BlazePose = kk.BlazeKind;
+/** the game hooks: logged, then played by the pack unless muted. v03 adds link() (wrapped like every other hook) and
+ *  blaze(pose), below. */
 export const sfx = Object.fromEntries(Object.keys(kk.sfx).map(k => [k, (...args: unknown[]) => {
   log(k, args);
   if (!muted) (kk.sfx as any)[k](...args);
-}])) as Hooks;
-/** v0.3.5 connect beat: fired once, as the two part-colour lines start drawing into the answer (0.1 s after the tap,
- *  passed as { delay }). Silent stub (logged only) until the Audio Engineer's sound is approved. */
-sfx.link = (o?: kk.PlayOpts) => { log('link', [o]); };
-/** silent stub (logged as ['blaze', [], t, pose]) until the Audio Engineer's Blaze sounds are approved; then it plays
- *  the pose's sound unless muted, like every other hook */
-sfx.blaze = (pose: BlazePose) => {
-  log('blaze', []); const L = (window as any).__sfxLog; if (L?.length) L[L.length - 1].push(pose);
+}])) as typeof kk.sfx;
+/** v0.3.6: sfx.link({ delay: 0.1 }) is called by the connect beat in the tap's tick, so it sounds as the two part-colour
+ *  lines start drawing into the answer (0.1 s after the tap). It is the generic wrapper above: logged, played unless muted. */
+/** v0.3.6: call on the frame the pose swaps in. The pack adds its own BLAZE_OFFSET (100 ms; think 0), so no extra delay
+ *  here. Logged as ['blaze', [], poseFrameMs, pose, soundStartsMs]; played unless muted. */
+sfx.blaze = (pose: BlazePose, o?: kk.PlayOpts) => {
+  log('blaze', o ? [o] : []); const L = (window as any).__sfxLog;
+  if (L?.length) { const e = L[L.length - 1]; e.push(pose, e[2] + (kk.BLAZE_OFFSET[pose] ?? 0) * 1000); }
+  if (!muted) kk.sfx.blaze(pose, o);
 };
 
 /** v0.3.3: the counter tile turns green on the final count (150 ms after partPop(1)) */
 export function total(o?: kk.PlayOpts): void { sfx.total(o); }
-/** Fade out everything playing or scheduled (tap to skip, quit). */
+/** Fade out everything playing or scheduled (quit, round end). */
 export function stopAll(): void { log('stopAll', []); kk.stopAll(); }
 
 export function isMuted(): boolean { return muted; }

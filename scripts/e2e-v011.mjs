@@ -43,7 +43,8 @@ const sumState = () => kk(() => {
   return { text: s.textContent, hint: s.classList.contains('hint'), parts: [...s.querySelectorAll('.p')].map(e => [e.textContent, cs(e)]), ans: s.querySelector('.a') ? [s.querySelector('.a').textContent, cs(s.querySelector('.a'))] : null, size: parseFloat(getComputedStyle(s).fontSize) };
 });
 const BLUE = 'rgb(58, 123, 255)', GREEN = 'rgb(34, 197, 94)';
-const centreClear = () => kk(() => { const b = document.getElementById('board'); return [...b.children].filter(e => !e.classList.contains('slot') && !e.classList.contains('outline') && e.id !== 'fx').length === 0 && !/=/.test(document.getElementById('fx')?.textContent || ''); });
+// (v0.3.6: the connect beat's line layer, svg.connect, sits in the board under the tiles; it holds no text)
+const centreClear = () => kk(() => { const b = document.getElementById('board'); return [...b.children].filter(e => !e.classList.contains('slot') && !e.classList.contains('outline') && !e.classList.contains('connect') && e.id !== 'fx').length === 0 && !/=/.test(document.getElementById('fx')?.textContent || ''); });
 
 await page.goto(BASE + '?level=hard&teach=quick&round=45'); await kk(() => localStorage.clear()); await page.reload();
 await page.waitForFunction(() => document.fonts.status === 'loaded');

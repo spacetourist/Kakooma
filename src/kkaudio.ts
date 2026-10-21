@@ -1,8 +1,10 @@
-// kkaudio.ts: Kakooma sound pack v02c (v0.3.2 counting + total()). Plain Web Audio, no dependencies. See AUDIO.md.
+// kkaudio.ts: Kakooma sound pack v03 (v02c + Blaze reactions: blaze(), bond-line follow-through: link()). Plain Web Audio, no dependencies. See AUDIO.md.
 // RULES: audio never drives game timing; every call is synchronous, cheap and never throws.
 // If anything fails (no Web Audio, fetch/decode error, locked context) the game simply stays silent.
 
 export type Bus = 'master' | 'sfx' | 'ui';
+/** Blaze (the flame mascot) reaction poses; each has a short character sound (v03) */
+export type BlazeKind = 'cheer' | 'thumbs' | 'oops' | 'clap' | 'think' | 'whoa';
 export interface InitOptions {
   /** folder holding kk_sfx.json/.ogg/.m4a, e.g. import.meta.env.BASE_URL + 'audio/' */
   base?: string;
@@ -34,12 +36,19 @@ const UI_SOUNDS = new Set(['uiTap', 'slide']);
 const GROUP_OF: Record<string, string> = {
   wrong: 'wrong', penalty: 'penalty', cheer: 'cheer', star: 'cheer', streak: 'cue', newBest: 'cue', timeUp: 'cue', lowTime: 'cue', roundStart: 'cue',
   replay: 'replay', bond: 'bond', clear: 'bond', quizStart: 'cue2',
+  // v03: one Blaze voice at a time (a new pose's sound fades the previous one out)
+  blaze_cheer: 'blaze', blaze_thumbs: 'blaze', blaze_oops: 'blaze', blaze_clap: 'blaze', blaze_think: 'blaze', blaze_whoa: 'blaze',
 };
 /** minimum spacing per family (s); calls inside the window are dropped (rapid-fire hooks) */
 const MIN_GAP: Record<string, number> = { slide: 0.035, count: 0.024, tick: 0.2, uiTap: 0.03, tap: 0.025 };
 /** polyphony cap per family (oldest is faded out) */
 const MAX_POLY: Record<string, number> = { count: 4, slide: 3, tap: 3 };
 const MAX_VOICES = 24;
+/** v03: Blaze sounds start this long after blaze() is called (the pose frame), so they land just AFTER the attack of the
+ *  main cue they ride on (wrong, correct, streak, the count ten-accent) instead of on top of it. 100 ms measured cleanest
+ *  (no masking of the main cue's body in any pairing; see CHANGES.md). think is idle-only, so it has no offset.
+ *  Audio up to ~125 ms behind the picture reads as in sync. Editable at runtime; a per-call { when } is offset too. */
+export const BLAZE_OFFSET: Record<BlazeKind, number> = { cheer: 0.1, thumbs: 0.1, oops: 0.1, clap: 0.1, think: 0, whoa: 0.1 };
 /** count(i) pacing (v02b). Dots closer together than fastGap (110 ms) are "fast": every dot still plays (so the last one
  *  always sounds), but each is shortened to lenFrac of the gap (never below minLen) with a short fade, ducked by up to duckDb
  *  (reached at minGapRef), and alternate dots (odd i, except 10ths) become ghost notes ghostDb quieter. That halves the
@@ -246,6 +255,7 @@ export const sfx = {
   hop(o?: PlayOpts): void { p('hop', o); },
   makeTen(o?: PlayOpts): void { p('makeTen', o); },
   total(o?: PlayOpts): void { p('total', o); },                // v02c: counter tile turns green on the final count (~150 ms after partPop(1))
+  link(o?: PlayOpts): void { p('link', o); },                  // v03: bond lines start lighting after a correct tap (~100-200 ms after correct())
   bond(o?: PlayOpts): void { p('bond', o); },
   partPop(i: number, o?: PlayOpts): void { p('partPop_' + clampI(i, 0, 1), o); },   // 0 = smaller part, 1 = larger
   cheer(o?: PlayOpts): void { p('cheer', o); },                  // with the confetti, as the caption lands
@@ -257,6 +267,15 @@ export const sfx = {
   labPair(a: number, o?: PlayOpts): void { p('labPair_' + ((Math.max(1, Math.floor(+a || 1)) - 1) % 5), o); },
   star(o?: PlayOpts): void { p('star', o); },
   quizStart(o?: PlayOpts): void { p('quizStart', o); },
+  // v03: Blaze companion reactions, fired on the frame the pose swaps in (pose lasts ~0.9 s). Subordinate layer: 4-7 dB
+  // under the cue it rides on, offset by BLAZE_OFFSET. TRIM_DB.blaze trims all six at once. Unknown kinds are ignored.
+  blaze(kind: BlazeKind, o?: PlayOpts): void {
+    try {
+      if (!S || !Object.prototype.hasOwnProperty.call(BLAZE_OFFSET, kind)) return;
+      const off = Math.max(0, +BLAZE_OFFSET[kind] || 0), g = (o?.gainDb ?? 0) + (TRIM_DB.blaze ?? 0);
+      play('blaze_' + kind, o?.when !== undefined ? { when: o.when + off, gainDb: g } : { delay: Math.max(0, o?.delay ?? 0) + off, gainDb: g });
+    } catch { /* never throws */ }
+  },
 };
 
 /** Optional helper: schedule the v0.2.3 bond sounds on the audio clock, t0 = the answer reaching the top (now if omitted).

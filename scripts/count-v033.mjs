@@ -1,5 +1,5 @@
 // v0.3.3 count + make-ten stage: node scripts/count-v033.mjs [baseUrl]. Per level: lesson length + hook timings for 3+7, 7+12, 24+26,
-// +1-per-dot, continuous fill, the in-count make-ten flash/caption, source badges (v0.3.3.1), total() stagger, reduced motion, skip mid-count.
+// +1-per-dot, continuous fill, the in-count make-ten flash/caption, source badges (v0.3.3.1), total() stagger, reduced motion, taps mid-count do nothing (v0.3.6).
 import { createServer } from 'http';
 import { readFileSync, existsSync, statSync, mkdirSync, writeFileSync } from 'fs';
 import { join, extname } from 'path';
@@ -56,11 +56,11 @@ async function runOne(lv, name, a, b, nums) {
   const midShot = async () => {
     await cntAt(mid); await page.screenshot({ path: `${SHOTS}${TAG}-sources-${lv}-${a}-${b}${VP.width === 390 ? '' : '-' + VP.width}.png` });
     const m = await kk(() => { const box = (l, t, w, h) => ({ l, r: l + w, t, b: t + h, cx: l + w / 2, cy: t + h / 2, w }); const R = e => box(e.offsetLeft, e.offsetTop, e.offsetWidth, e.offsetHeight); // layout boxes (no pop/pulse transforms)
-      const sb = [...document.querySelectorAll('#fx .srcb')], ans = document.querySelector('#fx .bnode.whole'), cap = document.querySelector('#fx .mk10'), hint = document.querySelector('#fx .skiphint'), board = document.getElementById('board');
+      const sb = [...document.querySelectorAll('#fx .srcb')], ans = document.querySelector('#fx .bnode.whole'), cap = document.querySelector('#fx .mk10'), board = document.getElementById('board');
       return { n: sb.length, sb: sb.map(R), fill: sb.map(e => [getComputedStyle(e.querySelector('.fill')).backgroundColor, getComputedStyle(e.querySelector('.fill')).clipPath, getComputedStyle(e.querySelector('.fill b')).color, +getComputedStyle(e).opacity]),
-        ans: (([x, y, d]) => box(x - d / 2, y - d / 2, d, d))(ans.dataset.rest.split(',').map(Number)), frames: [...document.querySelectorAll('#fx .tf')].map(R), cap: +getComputedStyle(cap).opacity > 0.05 ? R(cap) : null, hint: R(hint), board: box(0, 0, document.getElementById('fx').clientWidth, document.getElementById('fx').clientHeight), key: document.querySelectorAll('#fx .pkey').length }; });
+        ans: (([x, y, d]) => box(x - d / 2, y - d / 2, d, d))(ans.dataset.rest.split(',').map(Number)), frames: [...document.querySelectorAll('#fx .tf')].map(R), cap: +getComputedStyle(cap).opacity > 0.05 ? R(cap) : null, board: box(0, 0, document.getElementById('fx').clientWidth, document.getElementById('fx').clientHeight), key: document.querySelectorAll('#fx .pkey').length }; });
     const ov = (p, q) => p.l < q.r - 0.5 && q.l < p.r - 0.5 && p.t < q.b - 0.5 && q.t < p.b - 0.5;
-    const [L, Rr] = m.sb, A = m.ans, others = [...m.frames, ...(m.cap ? [m.cap] : []), m.hint];
+    const [L, Rr] = m.sb, A = m.ans, others = [...m.frames, ...(m.cap ? [m.cap] : [])] // (v0.3.6: no 'Tap to skip' hint any more);
     const row = m.n === 2 && Math.abs(L.cy - A.cy) < 3 && Math.abs(Rr.cy - A.cy) < 3 && L.r <= A.l && A.r <= Rr.l && Math.abs((A.l - L.r) - (Rr.l - A.r)) < 2;
     const noOv = [L, Rr, A].every(x => others.every(o => !ov(x, o))) && !ov(L, A) && !ov(Rr, A) && [L, Rr, A, ...m.frames].every(x => x.l >= m.board.l - 1 && x.r <= m.board.r + 1);
     check(row && noOv && m.key === 0, `${lv} ${name} @${VP.width}px: one row [${Math.round(L.w)}] ${Math.round(A.l - L.r)} [${Math.round(A.w)}] ${Math.round(Rr.l - A.r)} [${Math.round(Rr.w)}] under the frames, nothing overlaps, no colour key`);
@@ -125,15 +125,15 @@ if (!ONLY) {
   const per = (cnt[9][1] - cnt[0][1]) / 9;
   check(cnt.length === 10 && Math.abs(per - 300) <= 25, `reduced: counter still steps every ~300 ms (${Math.round(per)})`);
   out['reduced easy 3+7'] = { lessonMs: Math.round((await kk(() => performance.now())) - tap) };
-  // skip mid-count: instant, stopAll
+  // v0.3.6: taps mid-count do nothing: the count carries on to 10, no stopAll, the board comes back when the lesson ends
   await open('easy', 4);
   await lesson({ nums: [3, 7, 10, 1], a: 3, b: 7, answer: 10 });
   await page.waitForFunction(() => (window.__kkCount || []).length >= 3);
-  const t1 = await kk(() => performance.now()); await page.touchscreen.tap(195, 600);
-  await page.waitForFunction(() => window.__kk.phase === 'play', null, { timeout: 2000 });
-  const sk = await kk(() => ({ ms: performance.now(), fx: document.querySelectorAll('#fx > *').length, stop: window.__sfxLog.some(x => x[0] === 'stopAll'), running: window.__kk.running }));
-  const n0 = await kk(() => window.__kkCount.length); await wait(400); const n1 = await kk(() => window.__kkCount.length);
-  check(sk.ms - t1 < 300 && sk.fx === 0 && sk.stop && sk.running && n1 === n0, `skip mid-count: next board in ${Math.round(sk.ms - t1)} ms, overlay gone, stopAll, timer running, counting stopped`);
+  const n0 = await kk(() => window.__kkCount.length); await page.touchscreen.tap(195, 600); await wait(100); await page.touchscreen.tap(120, 400); await wait(500);
+  const sk = await kk(() => ({ phase: window.__kk.phase, n: window.__kkCount.length, stop: window.__sfxLog.some(x => x[0] === 'stopAll'), running: window.__kk.running }));
+  await page.waitForFunction(() => window.__kk.phase === 'play', null, { timeout: 15000 });
+  const end = await kk(() => ({ n: window.__kkCount.length, fx: document.querySelectorAll('#fx > *').length, running: window.__kk.running, score: window.__kk.score }));
+  check(sk.phase !== 'play' && sk.n > n0 && !sk.stop && !sk.running && end.n === 10 && end.fx === 0 && end.running, `taps mid-count do nothing: counting carried on (${n0} -> ${sk.n} -> ${end.n}), no stopAll, then the board is back with the timer running`);
 }
 writeFileSync(`${SHOTS}${TAG}-count.json`, JSON.stringify(out, null, 1));
 check(errs.length === 0, 'no page errors ' + JSON.stringify(errs.slice(0, 3)));

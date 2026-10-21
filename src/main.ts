@@ -34,7 +34,7 @@ const st = {
   phase: 'menu' as Phase, n: 5, lv: 'easy' as Level, lastKey: '', puzzle: null as Puzzle | null,
   left: ROUND_MS, since: 0, running: false,
   score: 0, miss: 0, streak: 0, best: 0, solve: [] as number[], solved: [] as Solved[], shownAt: 0, pausedAt: 0,
-  prevBest: 0, teach: null as { skip: () => void } | null, teachCount: 0, teachStage: '', seen: new Set<string>(), badTiles: new Set<number>(), timers: new Set<number>(), run: 0,
+  prevBest: 0, teach: null as { cancel: () => void } | null, teachCount: 0, teachStage: '', seen: new Set<string>(), badTiles: new Set<number>(), timers: new Set<number>(), run: 0,
 };
 (window as any).__kk = st;
 
@@ -48,7 +48,7 @@ function later(fn: () => void, ms: number) {
   const h = window.setTimeout(() => { st.timers.delete(h); if (st.run === run) fn(); }, ms);
   st.timers.add(h);
 }
-function cancelTimers() { for (const h of st.timers) clearTimeout(h); st.timers.clear(); st.teach?.skip(); idleStop(); pendingStreak = 0; pendingCheer = 0; }
+function cancelTimers() { for (const h of st.timers) clearTimeout(h); st.timers.clear(); st.teach?.cancel(); idleStop(); pendingStreak = 0; pendingCheer = 0; }
 const esc = (s: string) => s.replace(/[&<>"']/g, c => `&#${c.charCodeAt(0)};`);
 
 // ---------- version ----------
@@ -123,10 +123,10 @@ const blaze = $('blaze'), blazeBody = $('blazeBody'), pill = $('streakPill');
 const tier = (s: number) => (s >= 20 ? 3 : s >= 10 ? 2 : s >= 5 ? 1 : 0);
 /** v0.3.5.2 (AE): when a streak level gets the star shower, its streak(n) sound moves onto the frame of the shower's
  *  first burst (in the lesson, or on the held board); correct() stays on the tap. Levels with no shower (x20, or
- *  reduced motion) keep it here, after the state change. A pending sound is flushed at the next board if the shower
- *  never ran (lesson skipped) and dropped on quit / round end. */
+ *  reduced motion) keep it here, after the state change. The beat and the lesson always play in full (v0.3.6: no
+ *  tap-to-skip), so the shower always runs; a pending sound/cheer is only ever dropped, on quit / round end. */
 let pendingStreak = 0, pendingCheer = 0; // pendingCheer: spark count of a deferred milestone cheer (0 = none)
-/** the shower's first burst (or the next board, if the shower never ran): streak(n) and, on the branch, Blaze's cheer
+/** the shower's first burst: streak(n) and Blaze's cheer
  *  swap + its sfx.blaze('cheer') in the same tick, so picture and sound stay together */
 function flushStreak() {
   if (pendingStreak) { const n = pendingStreak; pendingStreak = 0; sfx.streak(n); }
@@ -255,46 +255,51 @@ function replay(s: Solved, chip: HTMLElement) {
  *  draws into the answer, both arriving together (sfx.link() at 0.1 s); 0.5-0.7 s one soft pulse on the answer as the
  *  lines join + the sum strip fills in; hold, then lines + dimming fade over 0.15 s (0.85-1.0 s) and hand over.
  *  Reduced motion: same clock, the lines simply appear, no scale. Everything is built in the next frame (never on the
- *  input path); a tap anywhere but a button skips it. */
-function connectBeat(s: Solved, iC: number, big: boolean, then: () => void, onSkip: () => void) {
+ *  input path). v0.3.6: it always plays in full; taps on the board do nothing until the next board is ready. */
+function connectBeat(s: Solved, iC: number, big: boolean, then: () => void) {
   const run = st.run, C = CONNECT;
   let done = false; const anims: Animation[] = []; let svg: SVGSVGElement | null = null; let raf = 0;
   const others = () => tiles.filter((_, k) => k < s.nums.length && k !== iC && k !== iS && k !== iL);
   const iS = s.nums.indexOf(Math.min(s.a, s.b)), iL = s.nums.indexOf(Math.max(s.a, s.b)) === iS ? s.nums.lastIndexOf(Math.max(s.a, s.b)) : s.nums.indexOf(Math.max(s.a, s.b));
-  const cleanup = () => { cancelAnimationFrame(raf); for (const a of anims) a.cancel(); svg?.remove(); for (const t of tiles) t.classList.remove('cdim'); };
+  const cleanup = () => { cancelAnimationFrame(raf); for (const a of anims) a.cancel(); svg?.remove(); for (const t of tiles) { t.classList.remove('cdim'); t.parentElement?.classList.remove('cunder'); } };
   const finish = (next: () => void) => {
-    if (done) return; done = true; if (st.teach === handle) st.teach = null; st.teachStage = ''; document.removeEventListener('pointerdown', catcher, true);
+    if (done) return; done = true; if (st.teach === handle) st.teach = null; st.teachStage = '';
     cleanup(); tiles[iS].classList.add('add', 'cs'); tiles[iL].classList.add('add', 'cl'); showSum(s);
     if (st.run === run) next();
   };
-  const handle = { skip: () => { Promise.resolve().then(() => finish(onSkip)); } };
-  // tap anywhere skips the beat; buttons (Quit, mute) still work, so no full-screen catcher here
-  const catcher = (e: PointerEvent) => { if ((e.target as HTMLElement).closest?.('button, input, a')) return; e.preventDefault(); e.stopPropagation(); handle.skip(); };
-  document.addEventListener('pointerdown', catcher, true);
+  // v0.3.6: no tap-to-skip. Board taps do nothing while st.teach is set (onTap returns, nothing is queued); only quit /
+  // round end cancel the beat (cancelTimers, which also bumps st.run, so `then` never runs for a dead round)
+  const handle = { cancel: () => { Promise.resolve().then(() => finish(then)); } };
   st.teach = handle; st.teachStage = 'connect';
   raf = requestAnimationFrame(() => {
     if (done) return;
     const reduced = reducedMotion(), ans = tiles[iC];
-    for (const t of others()) t.classList.add('cdim');
+    for (const t of others()) { t.classList.add('cdim'); t.parentElement?.classList.add('cunder'); } // the slot keeps an opaque disc under the 40 % tile, so a line passing beneath never shows through
     // (easing per segment: an effect-wide easing would warp the whole 1 s clock)
     if (!reduced) anims.push(ans.animate([{ transform: 'scale(1)', easing: 'cubic-bezier(.34,1.56,.64,1)' }, { transform: 'scale(1.08)', offset: C.pop / C.end }, { transform: 'scale(1.08)', offset: C.pulseAt / C.end, easing: 'ease-out' },
       { transform: 'scale(1.14)', offset: (C.pulseAt + C.pulse * 0.45) / C.end, easing: 'ease-in-out' }, { transform: 'scale(1.08)', offset: (C.pulseAt + C.pulse) / C.end }, { transform: 'scale(1.08)', offset: C.fadeAt / C.end, easing: 'ease-in-out' }, { transform: 'scale(1)' }],
       { duration: C.end }));
     // the lines: from each part tile's edge into the answer's edge, in the part's colour
+    // v0.3.6 (GD): the line layer sits UNDER every number tile (inserted before the first slot, so DOM order paints it
+    // below them; the fx layer with the answer's glow stays on top) and each line runs centre to centre, so both ends are
+    // tucked under the circles and only the stretch between the tiles shows
     svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); svg.setAttribute('class', 'connect');
-    svg.setAttribute('viewBox', `0 0 ${fxEl.clientWidth} ${fxEl.clientHeight}`); fxEl.appendChild(svg);
+    svg.setAttribute('viewBox', `0 0 ${board.clientWidth} ${board.clientHeight}`); board.insertBefore(svg, board.querySelector('.slot'));
     const A = cur[iC], rA = ans.offsetWidth / 2;
     [iS, iL].forEach((k, part) => {
       const P = cur[k], rP = tiles[k].offsetWidth / 2, d = Math.hypot(A.x - P.x, A.y - P.y) || 1, ux = (A.x - P.x) / d, uy = (A.y - P.y) / d;
-      const x1 = P.x + ux * (rP - 4), y1 = P.y + uy * (rP - 4), x2 = A.x - ux * (rA * 1.08 - 4), y2 = A.y - uy * (rA * 1.08 - 4), len = Math.max(1, Math.hypot(x2 - x1, y2 - y1));
+      const x1 = P.x, y1 = P.y, x2 = A.x, y2 = A.y, len = Math.max(1, d);
+      // the visible stretch keeps GD's draw clock: the tip leaves the source circle at lineAt and reaches the answer's
+      // (1.08) circle at lineAt + line; the 5 px round cap stays tucked under both circles (tip 6 px inside each edge)
+      const s0 = Math.max(0, rP - 6), e0 = Math.max(s0 + 1, len - (rA * 1.08 - 6));
       const l = document.createElementNS('http://www.w3.org/2000/svg', 'line');
       l.setAttribute('x1', x1.toFixed(1)); l.setAttribute('y1', y1.toFixed(1)); l.setAttribute('x2', x2.toFixed(1)); l.setAttribute('y2', y2.toFixed(1));
       l.setAttribute('class', part ? 'cl' : 'cs'); l.style.strokeDasharray = String(len); svg!.appendChild(l);
       // hidden until its draw starts (a fully offset round-capped line still paints its caps), then draw, hold, fade
       anims.push(l.animate(reduced
         ? [{ opacity: 0, strokeDashoffset: 0 }, { opacity: 0, offset: C.lineAt / C.end }, { opacity: 1, offset: C.lineAt / C.end }, { opacity: 1, offset: C.fadeAt / C.end }, { opacity: 0 }]
-        : [{ opacity: 0, strokeDashoffset: len }, { opacity: 0, strokeDashoffset: len, offset: C.lineAt / C.end }, { opacity: 1, strokeDashoffset: len * 0.97, offset: (C.lineAt + 20) / C.end, easing: 'cubic-bezier(.4,0,.3,1)' },
-          { opacity: 1, strokeDashoffset: 0, offset: (C.lineAt + C.line) / C.end }, { opacity: 1, strokeDashoffset: 0, offset: C.fadeAt / C.end }, { opacity: 0, strokeDashoffset: 0 }],
+        : [{ opacity: 0, strokeDashoffset: len - s0 }, { opacity: 0, strokeDashoffset: len - s0, offset: C.lineAt / C.end }, { opacity: 1, strokeDashoffset: len - s0 - (e0 - s0) * 0.03, offset: (C.lineAt + 20) / C.end, easing: 'cubic-bezier(.4,0,.3,1)' },
+          { opacity: 1, strokeDashoffset: len - e0, offset: (C.lineAt + C.line) / C.end }, { opacity: 1, strokeDashoffset: len - e0, offset: C.fadeAt / C.end }, { opacity: 0, strokeDashoffset: len - e0 }],
         { duration: C.end, fill: 'both' }));
       // the part tile lights up in its colour as its line starts
       later(() => { if (!done) tiles[k].classList.add('add', part ? 'cl' : 'cs'); }, C.lineAt);
@@ -309,17 +314,18 @@ function connectBeat(s: Solved, iC: number, big: boolean, then: () => void, onSk
 }
 
 // ---------- teaching solve ----------
-const fxEl = $('fx'), skipper = $('skipper');
+const fxEl = $('fx');
 function runTeach(s: Solved, iC: number, then: () => void, big = false, live = true) {
   const run = st.run; let real: TeachRun | null = null, ended = false;
   const end = () => {
     if (ended) return; ended = true;
     if (st.teach === handle) st.teach = null;
-    st.teachStage = ''; skipper.classList.add('hidden');
+    st.teachStage = '';
     if (st.run === run) then();
   };
-  const handle = { skip: () => { if (real) real.skip(); else Promise.resolve().then(end); } };
-  st.teach = handle; st.teachCount++; skipper.classList.remove('hidden');
+  // v0.3.6: no tap-to-skip; the lesson always plays in full (only quit / round end cancel it, via cancelTimers)
+  const handle = { cancel: () => { if (real) real.cancel(); else Promise.resolve().then(end); } };
+  st.teach = handle; st.teachCount++;
   // build the animation in the next frame so the tap handler only flips state + classes (input stays instant)
   requestAnimationFrame(() => {
     if (ended) return;
@@ -329,9 +335,6 @@ function runTeach(s: Solved, iC: number, then: () => void, big = false, live = t
     real.done.then(end);
   });
 }
-// tap anywhere to skip (pointerdown: instant); the catcher eats the tap so it never lands on the next board
-skipper.addEventListener('pointerdown', e => { e.preventDefault(); st.teach?.skip(); });
-skipper.addEventListener('click', e => { if (e.detail === 0) st.teach?.skip(); });
 function wantsFull(extra: boolean) { if (TEACH === 'quick') return false; if (TEACH === 'full') return true; return st.score <= 3 || extra; }
 let capTimer = 0;
 /** Wrong tap (v0.2.1): the reason replaces the hint/placeholder inside the sum strip for 2 s, then the strip restores. */
@@ -362,7 +365,6 @@ function startRound() {
   sfx.roundStart();
 }
 function nextPuzzle() {
-  flushStreak(); // only if its shower never ran (e.g. the lesson was skipped)
   st.badTiles.clear();
   showSum(null);
   // window.__kkNext: optional queue of puzzles for automated tests (deterministic stage shots); normal play never sets it
@@ -397,7 +399,7 @@ function onTap(i: number, now: number) {
     st.solved.push(solved); addChip(solved, st.solved.length - 1);
     st.solve.push(now - st.shownAt);
     const prev = st.streak; st.score++; st.streak++; st.best = Math.max(st.best, st.streak);
-    // Blaze: comeback (thumbs) and 3/5/10 milestones (cheer + flare + sparks) always play; speedy whoa is off until GD's redo
+    // Blaze: comeback (thumbs) and 3/5/10 milestones (cheer + flare + sparks) always play; otherwise a speedy solve may get whoa (once a round, budgeted). One reaction per solve
     bzs.solves++;
     const cheerNow = !FORCE && !hadMistake && MILESTONES.includes(st.streak), sk = st.streak;
     const newBest = st.prevBest > 0 && st.score === st.prevBest + 1, big = newBest || [3, 5, 10].includes(st.streak);
@@ -407,15 +409,15 @@ function onTap(i: number, now: number) {
     sfx.correct();
     if (!FORCE) requestAnimationFrame(() => {
       if (hadMistake) bz.react('thumbs');
-      else if (cheerNow && !cheerLater) { if (!bz.react('cheer', { sparks: SPARKS[sk] })) blazeHop(); } // no shower (reduced motion): now
+      else if (cheerNow) { if (!cheerLater && !bz.react('cheer', { sparks: SPARKS[sk] })) blazeHop(); } // no shower (reduced motion): now; with one it waits for the shower, and the solve gets no other reaction
       else if (WHOA_ON && !bzs.whoaUsed && solved.ms < ((window as any).__kkSpeedyMs ?? SPEEDY_MS) && special('whoa')) bzs.whoaUsed = true;
     });
     const milestone = st.streak === 5 || st.streak === 10 || st.streak === 20;
     if (newBest) cueNewBest();
     const full = wantsFull(milestone || newBest || hadMistake);
-    // the connect beat (~1 s), then the counting lesson or the next puzzle; a tap skips the beat (and the lesson)
+    // the connect beat (~1 s), then the counting lesson or the next puzzle, always in full (no tap-to-skip since v0.3.6)
     // big moments: with a lesson, the star shower plays inside it (at the bond); without one, during a longer beat
-    connectBeat(solved, i, big && !full, () => full ? runTeach(solved, i, nextPuzzle, big) : nextPuzzle(), nextPuzzle);
+    connectBeat(solved, i, big && !full, () => full ? runTeach(solved, i, nextPuzzle, big) : nextPuzzle());
   } else {
     if (st.badTiles.has(i)) return; // no double penalty for re-tapping the same wrong tile
     st.badTiles.add(i); st.miss++;
