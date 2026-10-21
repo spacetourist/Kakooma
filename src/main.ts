@@ -1,7 +1,7 @@
 import './style.css';
 import { generate, sumKey, type Puzzle, type Level, LEVELS, CAP, LEVEL_NAME, isLevel, supports } from './puzzle';
 import { teach, type TeachRun } from './teach';
-import { haptic, ripple, reducedMotion, shower, preloadConfetti } from './fx';
+import { haptic, ripple, reducedMotion, shower, confetti, preloadConfetti, SHOWER } from './fx';
 import { sfx, initAudio, isMuted, setMuted, whenRunning } from './sfx';
 import { initLab } from './lab';
 import { avgSolve, secLabel } from './stats';
@@ -14,6 +14,7 @@ const Q = new URLSearchParams(location.search);
 const ROUND_MS = Math.max(5, Math.min(600, Number(Q.get('round')) || 60)) * 1000;
 const PENALTY_MS = 3000;          // wrong tap
 /** v0.3.5 connect beat (GD): the correct-answer reveal, same on every level; the round timer is PAUSED for it */
+const SHOWER_PEAK = 300; // ms after the last shower burst before the next board may appear
 const CONNECT = { pop: 150, lineAt: 100, line: 400, pulseAt: 500, pulse: 200, fadeAt: 850, fade: 150, end: 1000 };
 const SLIDE_MS = 250;             // picker change: tiles slide to the new corners
 /** v0.3: boards are per level + number count (kk.board.v2); v1 (no level) is migrated once to Hard and left in place as a backup. */
@@ -179,6 +180,7 @@ document.addEventListener('visibilitychange', () => {
 const sumEl = $('sum'), tray = $('tray');
 /** Strip under the board: the hint on a round's first puzzle, the sum (parts blue, answer green) during feedback, else a grey "? + ? = ?" placeholder. */
 function showSum(s: Solved | null) {
+  if (!s && st.teachStage === 'connect') return; // v0.3.5.1: the filled sum stays up until the beat hands over
   if (s) { sumEl.className = 'sum pop'; sumEl.innerHTML = `<span class="p">${s.a}</span><span>+</span><span class="p">${s.b}</span><span>=</span><span class="a">${s.c}</span>`; }
   else if (!st.solved.length) { sumEl.className = 'sum hint'; sumEl.textContent = 'Find the number made by two others'; }
   else { sumEl.className = 'sum ph'; sumEl.innerHTML = '<span>?</span><span>+</span><span>?</span><span>=</span><span>?</span>'; }
@@ -264,13 +266,15 @@ function connectBeat(s: Solved, iC: number, big: boolean, then: () => void, onSk
     sfx.link({ delay: C.lineAt / 1000 }); // once, as the lines start (no partPop in the reveal)
     later(() => { if (done) return; showSum(s); if (big) shower(); }, C.pulseAt);
     later(() => { if (!done) for (const t of tiles) t.classList.remove('cdim'); }, C.fadeAt);
-    later(() => finish(then), C.end);
+    // v0.3.5.1: a shower with no lesson after it holds the solved board (lines faded, sum still up) until the shower has
+    // passed its peak, so it never lands on a playable new board
+    later(() => finish(then), big ? C.pulseAt + SHOWER.ms + SHOWER_PEAK : C.end);
   });
 }
 
 // ---------- teaching solve ----------
 const fxEl = $('fx'), skipper = $('skipper');
-function runTeach(s: Solved, iC: number, then: () => void) {
+function runTeach(s: Solved, iC: number, then: () => void, big = false) {
   const run = st.run; let real: TeachRun | null = null, ended = false;
   const end = () => {
     if (ended) return; ended = true;
@@ -284,7 +288,7 @@ function runTeach(s: Solved, iC: number, then: () => void) {
   requestAnimationFrame(() => {
     if (ended) return;
     real = teach({ layer: fxEl, tiles, centre: i => ({ x: cur[i].x, y: cur[i].y }), n: s.nums.length,
-      iS: s.nums.indexOf(s.a), iL: s.nums.indexOf(s.b), iC, pace: st.lv, onHop: blazeHop, onStage: g => { st.teachStage = g; if (g === 'clear') showSum(null); } }, s.a, s.b);
+      iS: s.nums.indexOf(s.a), iL: s.nums.indexOf(s.b), iC, pace: st.lv, big, onHop: blazeHop, onStage: g => { st.teachStage = g; if (g === 'clear') showSum(null); } }, s.a, s.b);
     real.done.then(end);
   });
 }
@@ -360,7 +364,8 @@ function onTap(i: number, now: number) {
     if (newBest) cueNewBest();
     const full = wantsFull(milestone || newBest || hadMistake), big = newBest || [3, 5, 10].includes(st.streak);
     // the connect beat (~1 s), then the counting lesson or the next puzzle; a tap skips the beat (and the lesson)
-    connectBeat(solved, i, big, () => full ? runTeach(solved, i, nextPuzzle) : nextPuzzle(), nextPuzzle);
+    // big moments: with a lesson, the star shower plays inside it (at the bond); without one, during a longer beat
+    connectBeat(solved, i, big && !full, () => full ? runTeach(solved, i, nextPuzzle, big) : nextPuzzle(), nextPuzzle);
   } else {
     if (st.badTiles.has(i)) return; // no double penalty for re-tapping the same wrong tile
     st.badTiles.add(i); st.miss++;
@@ -547,5 +552,6 @@ press($('gQuit'), quit);
 boardN = st.n; boardLv = st.lv;
 if (reducedMotion()) document.documentElement.classList.add('reduced');
 preloadConfetti();
+(window as any).__kkFx = { burst: (x = 195, y = 200) => confetti(fxEl, x, y), shower }; // test hook (confetti shots / cap checks)
 toMenu();
 document.fonts?.ready.then(() => layout(shownN || st.n, 0));

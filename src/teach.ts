@@ -4,7 +4,7 @@
  * draws itself with confetti. Transforms + WAAPI only. teach() returns { done, skip }: skip() ends it at once.
  */
 import { planTeach, countTiming, type Plan, type Pace } from './plan';
-import { confetti, reducedMotion } from './fx';
+import { confetti, shower, reducedMotion } from './fx';
 import { sfx, stopAll } from './sfx';
 
 export interface TeachCtx {
@@ -15,6 +15,7 @@ export interface TeachCtx {
   onHop: () => void;             // Blaze hop
   onStage?: (s: string) => void; // progress hook (tests / analytics)
   pace?: Pace;                   // v0.3.2: counting speed by level (default medium)
+  big?: boolean;                 // v0.3.5.1: streak 3/5/10 or a new #1: the star shower replaces the bond burst
 }
 export interface TeachRun { done: Promise<void>; skip: () => void; plan: Plan }
 
@@ -255,7 +256,9 @@ export function teach(ctx: TeachCtx, a: number, b: number): TeachRun {
     if (await wait(tCap)) return;
     // the caption has landed and the bond is complete: one confetti burst onto the finished bond, Blaze hops
     ctx.onStage?.('cheer'); sfx.caption(); sfx.cheer();
-    confetti(layer, W.x, P[0].y, Math.max(80, Math.abs(P[1].x - P[0].x) / 2 + 50)); // v0.3.5: two angled bursts from either side of the bond (canvas, keeps falling after a skip)
+    // v0.3.5.1: a normal solve gets the two inward bursts at the bond centre; a big moment (streak 3/5/10, new #1) gets
+    // the star shower here instead, inside the lesson, so it has passed before the next board appears
+    if (ctx.big) shower(); else confetti(layer, W.x, (W.y + P[0].y) / 2);
     if (!reduced) ctx.onHop();
     if (await wait(tClear - tCap)) return; // hold: 2.5 s of reading after the caption lands
     // clear: the bond fades, then teach ends and the caller restores "? + ? = ?" and shows the next board
