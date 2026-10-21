@@ -100,8 +100,8 @@ while ((await kk(() => window.__kk.phase)) !== 'done') {
   await wait(250); if ((await kk(() => window.__kk.phase)) === 'play') await tapTile(await answerIdx()).catch(() => {});
   if (!saw20 && (await kk(() => window.__kk.streak)) === 20) {
     saw20 = true; await wait(260);
-    const z = await kk(() => ({ tier: document.getElementById('blaze').dataset.tier, shades: getComputedStyle(document.querySelector('.shades')).opacity }));
-    check(z.tier === '3' && z.shades === '1', 'x20: Blaze tier 3 with sunglasses ' + JSON.stringify(z));
+    const z = await kk(() => ({ tier: document.getElementById('blaze').dataset.tier, scale: getComputedStyle(document.querySelector('#blaze .blaze-scale')).transform, shades: document.querySelectorAll('.shades').length }));
+    check(z.tier === '3' && /matrix\(1\.25,/.test(z.scale) && z.shades === 0, 'x20 (v0.3.6.1): Blaze at his biggest size (tier 3, 1.25), no sunglasses ' + JSON.stringify(z));
     await shot('03b-streak-x20-4');
   }
 }

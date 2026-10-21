@@ -36,6 +36,8 @@ export function preloadPoses(): Promise<void> {
   return preloading;
 }
 export const poseReady = (p: Pose) => ready.has(p);
+/** v0.3.6.1: a pose's image URL (the results screen's new-#1 Blaze uses the cheer image; visual only, no sound) */
+export const poseSrc = (p: Pose) => (FILES[p] ? DIR + FILES[p] : null);
 
 type KF = Keyframe[];
 const MOTION: Record<Pose, { kf: KF; ms: number; easing?: string }> = {

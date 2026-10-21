@@ -27,19 +27,26 @@ const P1 = { nums: [3, 7, 10, 2, 9], a: 3, b: 7, answer: 10 }, P2 = { nums: [4, 
  *  slot where P2's answer will appear, through `ms`; return the state on the next board after 600 ms */
 async function hammer(ms) {
   await kk(p => { window.__kkNext = [p]; }, P2);
+  await kk(() => { window.__taps = []; window.__h0 = performance.now() + 30; window.__readyAt = Infinity; if (!window.__tapL) { window.__tapL = 1; document.addEventListener('pointerdown', () => window.__taps.push(performance.now()), true); }
+    const f = () => { if (window.__kk.phase === 'play' && !window.__kk.teach && performance.now() > window.__h0 + 100) window.__readyAt = performance.now(); else requestAnimationFrame(f); }; requestAnimationFrame(f); });
   await tapEl(`.tile[data-i="${await ansI()}"]`); const t0 = Date.now(), s0 = await S();
   const seen = new Set(); let n = 0;
   while (Date.now() - t0 < ms) { const st = await S(); seen.add(st.stage || st.phase); if (st.phase === 'play' && !st.teach) break;
     await tapEl(['.tile[data-i="3"]', '.tile[data-i="0"]', '#board', '.tile[data-i="1"]'][n++ % 4]); await wait(120); }
   await waitPlay(); const ready = Date.now() - t0; await wait(600);
-  const s1 = await S(); return { s0, s1, n, ready, seen: [...seen], board: await kk(() => window.__kk.puzzle.answer) };
+  // a tap the test issued just as the board came back may land on it legitimately; what must never happen is a pick
+  // with no tap after the board was ready (a queued tap replayed). Page-side: every pick after s0 needs a pointerdown
+  // after the next board's ready moment, within 50 ms before it
+  const q = await kk(() => { const r = window.__readyAt, picks = window.__sfxLog.filter(e => ['correct', 'wrong'].includes(e[0]) && e[2] > window.__h0).map(e => e[2]);
+    return { late: picks.filter(p => !window.__taps.some(t => t >= r && t <= p && p - t < 50)).length, picks: picks.length, tapsAfter: window.__taps.filter(t => t >= r).length }; });
+  const s1 = await S(); s1.unmatched = q.late; s1.lateTaps = q.tapsAfter; s1.latePicks = q.picks; const r = { s0, s1, n, ready, seen: [...seen], board: await kk(() => window.__kk.puzzle.answer) }; if (process.env.DBG) console.log(JSON.stringify(r)); return r;
 }
 // A: quick (no lesson): taps through the ~1 s connect beat
 await page.goto(BASE + '?round=600&level=easy&teach=quick'); await page.waitForFunction(() => document.fonts.status === 'loaded');
 await kk(() => localStorage.removeItem('kk.mute'));
 await kk(p => { window.__kkNext = [p]; }, P1); await tapEl('#mStart'); await waitPlay(); await wait(300);
 let h = await hammer(3000);
-check(h.n >= 5 && h.s1.score === h.s0.score && h.s1.miss === 0 && h.s1.picks === h.s0.picks && h.board === 12 && h.ready > 950, `connect beat: ${h.n} taps (incl. the next board's answer slot) did nothing; next board ready at ${h.ready} ms, 600 ms later still score ${h.s1.score}, miss ${h.s1.miss}, no pick replayed (${h.seen})`);
+check(h.n >= 5 && h.s1.unmatched === 0 && h.board === 12 && h.ready > 950 && (h.s1.score - h.s0.score) + h.s1.miss <= h.s1.lateTaps, `connect beat: ${h.n} taps (incl. the next board's answer slot) did nothing; next board ready at ${h.ready} ms, 0 picks without a fresh tap after it (${h.s1.latePicks} pick(s) from ${h.s1.lateTaps} tap(s) the test sent just after the board was back) (${h.seen})`);
 await tapEl(`.tile[data-i="${await ansI()}"]`); await wait(50);
 check((await S()).score === h.s1.score + 1, 'input live on the next board at once (a real tap scores)');
 await waitPlay(); await wait(200);
@@ -48,7 +55,7 @@ await page.goto(BASE + '?round=600&level=easy&teach=full'); await page.waitForFu
 await kk(p => { window.__kkNext = [p]; }, P1); await tapEl('#mStart'); await waitPlay(); await wait(300);
 for (let k = 1; k <= 3; k++) {
   h = await hammer(20000);
-  check(h.n >= 20 && ['connect', 'fly'].every(g => h.seen.includes(g)) && h.s1.score === h.s0.score && h.s1.miss === 0 && h.s1.picks === h.s0.picks && h.board === 12, `lesson ${k}: ${h.n} taps through the beat + counting (${h.seen.join(' > ')}) did nothing: played in full (${h.ready} ms), no pick on the next board 600 ms later`);
+  check(h.n >= 20 && ['connect', 'fly'].every(g => h.seen.includes(g)) && h.s1.unmatched === 0 && h.s1.score - h.s0.score + h.s1.miss <= h.s1.lateTaps && h.board === 12, `lesson ${k}: ${h.n} taps through the beat + counting (${h.seen.join(' > ')}) did nothing: played in full (${h.ready} ms), no replayed pick on the next board (${h.s1.latePicks} from ${h.s1.lateTaps} fresh tap(s))`);
   const t = Date.now(); await tapEl(`.tile[data-i="${await ansI()}"]`); const s = await S();
   check(s.score === h.s1.score + 1, `lesson ${k}: board input live again at once after the lesson (${Date.now() - t} ms tap-to-score)`);
   await waitPlay(); await wait(300); await kk(p => { window.__kkNext = [p]; }, P1); await tapEl(`.tile[data-i="${await ansI()}"]`); await waitPlay(); await wait(300);

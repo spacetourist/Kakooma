@@ -4,7 +4,7 @@ import { teach, type TeachRun } from './teach';
 import { haptic, ripple, reducedMotion, shower, confetti, preloadConfetti, SHOWER } from './fx';
 import { sfx, initAudio, isMuted, setMuted, whenRunning } from './sfx';
 import { initLab } from './lab';
-import { blazeCtl, preloadPoses, POSES, WHOA_ON, type Pose } from './blaze';
+import { blazeCtl, preloadPoses, poseSrc, POSES, WHOA_ON, type Pose } from './blaze';
 import { avgSolve, secLabel } from './stats';
 
 const $ = (id: string) => document.getElementById(id)!;
@@ -464,6 +464,7 @@ let lastNewBest = -Infinity;
 function cueNewBest() { const now = performance.now(); if (now - lastNewBest < 1500) return; lastNewBest = now; sfx.newBest(); }
 
 let pending: Entry | null = null, lastSaved = 0, fromGame = false;
+const rBlazeImg = $('rBlaze').querySelector('img') as HTMLImageElement, RBLAZE_IDLE = rBlazeImg.src;
 function endRound() {
   if (st.phase === 'done') return;
   cancelTimers(); st.run++; pause(performance.now()); st.left = 0; drawTimer(0);
@@ -475,7 +476,7 @@ function endRound() {
   $('rStreak').textContent = `x${e.streak}`; $('rAvg').textContent = sec(avg); $('rMiss').textContent = String(e.miss);
   const q = qualifies(e);
   const pos = [...boardFor(e.lv, e.n), e].sort(cmp).indexOf(e) + 1;
-  const top = q && pos === 1; // v0.3.1: a new #1 on this level + shape is an event (gold #1 card, Blaze in shades)
+  const top = q && pos === 1; // v0.3.1: a new #1 on this level + shape is an event (gold #1 card; v0.3.6.1: Blaze in his cheer pose, hopping)
   $('rRank').innerHTML = q
     ? `<span class="pos">#${pos}${top ? '<i class="star" aria-label="new top score">★</i>' : ''}</span><span>${pos === 1 ? 'New top score' : 'Leaderboard place'} on ${LEVEL_NAME[e.lv]} ${SHAPE[e.n]}</span>`
     : `<span class="pos na">—</span><span>${e.score ? `Not in the ${LEVEL_NAME[e.lv]} ${SHAPE[e.n]} top 10 this time` : 'Solve one to get on the board'}</span>`;
@@ -485,6 +486,9 @@ function endRound() {
   fromGame = true;
   $('rRank').classList.toggle('gold', top); // v0.3.3 (GD): only the #1 card is gold; the score card stays white
   $('rBlaze').classList.toggle('cool', top);
+  // v0.3.6.1 (GD): a new #1 swaps Blaze to the cheer pose image (the in-game cheer asset) and keeps the hop loop. Visual
+  // only (AE): no sfx.blaze() here, newBest already plays for the #1
+  rBlazeImg.src = top ? poseSrc('cheer') ?? RBLAZE_IDLE : RBLAZE_IDLE;
   show('results');
   sfx.timeUp();
   if (top) { cueNewBest(); shower(); } // same tick (so the same frame) as the gold cards appear; v0.3.5: + the star shower

@@ -44,7 +44,7 @@ button { font: inherit; color: inherit; border: 0; background: none; padding: 0;
 /* v0.3.5 reactions: GD's pose sits exactly over blaze.png (same box, same bottom anchor); the face overlays hide meanwhile */
 .blaze-body img.pose { position: absolute; left: 0; top: 0; }
 .blaze-body img.pose[hidden] { display: none; }
-.blaze-body[data-pose] .lid, .blaze-body[data-pose] .mouth, .blaze-body[data-pose] .shades { visibility: hidden; }
+.blaze-body[data-pose] .lid, .blaze-body[data-pose] .mouth { visibility: hidden; }
 .blaze .spark { position: absolute; left: 50%; top: 46%; width: 14px; height: 14px; margin: -7px 0 0 -7px; pointer-events: none; z-index: 2;
   background: radial-gradient(circle, #fff6b8 0 22%, #ffbe1a 48%, #ff8a00 68%, rgba(255, 120, 0, 0) 74%);
   clip-path: polygon(50% 0, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0 50%, 38% 38%); }
@@ -54,8 +54,6 @@ button { font: inherit; color: inherit; border: 0; background: none; padding: 0;
 .lid::after { content: ''; position: absolute; left: 12%; right: 12%; top: 30%; height: 34%; border-bottom: 3px solid #2a1405; border-radius: 0 0 50% 50% / 0 0 100% 100%; }
 .mouth { position: absolute; left: 40%; top: 64%; width: 16%; height: 14%; border-radius: 50%; background: radial-gradient(#ff8c06, #ff8405); opacity: 0; }
 .mouth::after { content: ''; position: absolute; left: 36%; top: 30%; width: 28%; height: 34%; border-radius: 50%; background: #5a1a0c; }
-.shades { position: absolute; left: 21%; top: 49%; width: 54%; opacity: 0; transform: translateY(-6px); transition: opacity .2s, transform .25s; }
-.blaze[data-tier="3"] .shades { opacity: 1; transform: none; }
 .streak-pill { position: relative; z-index: 1; margin-top: -10px; min-width: 64px; height: 30px; padding: 0 12px; border-radius: 15px; background: var(--ink); color: #fff;
   display: grid; place-items: center; font: 700 18px/1 var(--f-display); font-variant-numeric: tabular-nums; box-shadow: var(--shadow); }
 #play[data-mode="menu"] .streak-pill { visibility: hidden; }
@@ -177,7 +175,7 @@ button { font: inherit; color: inherit; border: 0; background: none; padding: 0;
 .rblaze .blaze-body { width: auto; height: auto; flex: 1 1 0; min-height: 0; max-height: 96px; aspect-ratio: 634 / 581; }
 .rblaze .blaze-body img { width: 100%; height: 100%; object-fit: contain; }
 .rblaze .rshadow { width: 58px; height: 8px; margin-top: 2px; border-radius: 50%; background: rgba(29, 35, 64, .1); }
-.rblaze.cool .shades { opacity: 1; transform: none; }
+/* v0.3.6.1: no sunglasses any more (x20: biggest size only; a new #1: the cheer pose image, same hop) */
 .rblaze.cool .blaze-body { animation: rhop 1.3s cubic-bezier(.3, 0, .4, 1) infinite; }
 .rblaze.cool .rshadow { animation: rshadow 1.3s cubic-bezier(.3, 0, .4, 1) infinite; }
 @keyframes rhop { 0%, 100% { transform: translateY(0) scale(1.04, .96); } 12% { transform: translateY(0) scale(1); } 45% { transform: translateY(-16px) scale(.98, 1.03); } 78% { transform: translateY(0) scale(1); } }

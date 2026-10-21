@@ -66,11 +66,11 @@ const avgTxt = await page.textContent('#rAvg'), mean = times.reduce((s, x) => s 
 check(times.length === 3 && times.every(t => t >= 1250 && t < 1700) && avgTxt === `${(mean / 1000).toFixed(1)}s` && avgTxt !== '0.0s', `AVG SOLVE is the real average: solves ${JSON.stringify(times)} -> ${avgTxt}`);
 // first ever score = new #1 -> gold
 let g = await kk(() => ({ rank: document.getElementById('rRank').className, score: document.getElementById('rScoreCard').className, scoreBg: getComputedStyle(document.getElementById('rScoreCard')).backgroundColor, scoreSh: getComputedStyle(document.getElementById('rScoreCard')).boxShadow, star: !!document.querySelector('#rRank .star'), cool: document.getElementById('rBlaze').className, text: document.getElementById('rRank').textContent, bg: getComputedStyle(document.getElementById('rRank')).backgroundColor, sh: getComputedStyle(document.getElementById('rRank')).boxShadow }));
-check(/gold/.test(g.rank) && !/gold/.test(g.score) && g.scoreBg === 'rgb(255, 255, 255)' && !/255, 201, 40/.test(g.scoreSh) && g.star && /cool/.test(g.cool) && /rgb\(255, 201, 40\)/.test(g.sh) && g.bg === 'rgb(255, 248, 222)', 'new #1 (v0.3.3): gold edge #ffc928 + light gold tint on the #1 rank card only (score card white), gold star by #1, Blaze in shades ' + JSON.stringify(g));
+check(/gold/.test(g.rank) && !/gold/.test(g.score) && g.scoreBg === 'rgb(255, 255, 255)' && !/255, 201, 40/.test(g.scoreSh) && g.star && /cool/.test(g.cool) && /rgb\(255, 201, 40\)/.test(g.sh) && g.bg === 'rgb(255, 248, 222)', 'new #1 (v0.3.3): gold edge #ffc928 + light gold tint on the #1 rank card only (score card white), gold star by #1, Blaze cool (cheer pose) ' + JSON.stringify(g));
 const nb = await kk(() => window.__sfxLog.filter(x => x[0] === 'newBest').length);
 check(nb === 1, `newBest fires once at the gold reveal (first ever #1: no old best to beat in-round) (${nb})`);
-const anim = await kk(() => ({ body: getComputedStyle(document.querySelector('#rBlaze .blaze-body')).animationName, shades: +getComputedStyle(document.querySelector('#rBlaze .shades')).opacity }));
-check(anim.body === 'rhop' && anim.shades === 1, 'Blaze hops in a loop wearing sunglasses ' + JSON.stringify(anim));
+const anim = await kk(() => ({ body: getComputedStyle(document.querySelector('#rBlaze .blaze-body')).animationName, img: document.querySelector('#rBlaze img').getAttribute('src').split('/').pop(), shades: document.querySelectorAll('.shades').length }));
+check(anim.body === 'rhop' && anim.img === 'cheer.webp' && anim.shades === 0, 'v0.3.6.1: Blaze hops in a loop in his cheer pose (no sunglasses) ' + JSON.stringify(anim));
 await typeName('KID');
 let L = await layoutInfo();
 check(!L.overflow.length && L.scrollW, '390: nothing overflows its card ' + JSON.stringify(L.overflow));
@@ -79,12 +79,12 @@ check(L.btns.retryVisible && L.blaze.visible && L.blaze.clearOfButtons, '390: RE
 await wait(500); await shot('01-results-new-top-390');
 await tapEl('#nameSave'); await wait(300);
 
-// ---------- 2. not a #1 (one solve, below KID's 3): happy Blaze, no shades, no gold; newBest silent ----------
+// ---------- 2. not a #1 (one solve, below KID's 3): happy Blaze (idle image), no gold; newBest silent ----------
 await tapEl('#bRetry'); await wait(100);
 await kk(() => { window.__sfxLog = []; });
 times = await (async () => { await waitPlay(); await wait(1500); const idx = await kk(() => window.__kk.puzzle.nums.indexOf(window.__kk.puzzle.answer)); await tapEl(`.tile[data-i="${idx}"]`); await page.waitForFunction(() => window.__kk.phase === 'done', null, { timeout: 15000 }); await wait(400); return kk(() => window.__kk.solve.map(Math.round)); })();
-g = await kk(() => ({ gold: document.querySelectorAll('#results .gold').length, star: !!document.querySelector('#rRank .star'), cool: document.getElementById('rBlaze').classList.contains('cool'), anim: getComputedStyle(document.querySelector('#rBlaze .blaze-body')).animationName, shades: +getComputedStyle(document.querySelector('#rBlaze .shades')).opacity, text: document.getElementById('rRank').textContent, nb: window.__sfxLog.filter(x => x[0] === 'newBest').length }));
-check(g.gold === 0 && !g.star && !g.cool && g.anim === 'bob' && g.shades === 0 && g.nb === 0 && /#2/.test(g.text), 'non-#1: no gold, happy bobbing Blaze without sunglasses, no newBest ' + JSON.stringify(g));
+g = await kk(() => ({ gold: document.querySelectorAll('#results .gold').length, star: !!document.querySelector('#rRank .star'), cool: document.getElementById('rBlaze').classList.contains('cool'), anim: getComputedStyle(document.querySelector('#rBlaze .blaze-body')).animationName, img: document.querySelector('#rBlaze img').getAttribute('src').split('/').pop(), text: document.getElementById('rRank').textContent, nb: window.__sfxLog.filter(x => x[0] === 'newBest').length }));
+check(g.gold === 0 && !g.star && !g.cool && g.anim === 'bob' && g.img === 'blaze.png' && g.nb === 0 && /#2/.test(g.text), 'non-#1: no gold, happy bobbing Blaze (idle image, not the cheer pose), no newBest ' + JSON.stringify(g));
 await typeName('ABC'); await wait(400);
 await shot('02-results-not-top-390');
 await tapEl('#rMenu'); await wait(300);
@@ -131,8 +131,8 @@ for (const [w, h, name] of [[360, 780, '03-results-new-top-360'], [412, 915, '04
 }
 await open(390, 844, '', true);
 await round(1, 400); await wait(300);
-g = await kk(() => ({ cool: document.getElementById('rBlaze').classList.contains('cool'), anim: getComputedStyle(document.querySelector('#rBlaze .blaze-body')).animationName, shades: +getComputedStyle(document.querySelector('#rBlaze .shades')).opacity }));
-check(g.cool && g.anim === 'none' && g.shades === 1, 'reduced motion: static Blaze (still in shades on a #1) ' + JSON.stringify(g));
+g = await kk(() => ({ cool: document.getElementById('rBlaze').classList.contains('cool'), anim: getComputedStyle(document.querySelector('#rBlaze .blaze-body')).animationName, img: document.querySelector('#rBlaze img').getAttribute('src').split('/').pop() }));
+check(g.cool && g.anim === 'none' && g.img === 'cheer.webp', 'reduced motion: static Blaze (still in the cheer pose on a #1) ' + JSON.stringify(g));
 await shot('06-results-reduced');
 check((await kk(() => document.getElementById('verLabel').textContent)) === VER || true, 'version');
 await tapEl('#rMenu'); await wait(200);
