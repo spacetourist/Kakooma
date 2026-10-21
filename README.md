@@ -1,4 +1,4 @@
-# Kakooma v0.3.4
+# Kakooma v0.3.4.1
 
 Maths trainer for Greg Tang's KAKOOMA puzzle. Pick a level (Easy 10, Medium 20, Hard 50: the biggest number on the board, the sum included) and a board (square, pentagon, hexagon or heptagon: 4–7 numbers; Easy offers 4 or 5, because 6 or 7 different numbers up to 10 can't make a fair board). Exactly one number is the sum of two others; tap it. 60-second rounds, streaks (Blaze grows at x5, x10 and x20), a 3-second penalty for a wrong tap, and a leaderboard per board.
 

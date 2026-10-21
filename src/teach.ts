@@ -86,10 +86,9 @@ export function teach(ctx: TeachCtx, a: number, b: number): TeachRun {
   const srcs = [plan.S, plan.L].map((v, i) => {
     const e = add(document.createElement('div')); e.className = `srcb p${i}`;
     e.style.width = e.style.height = SB + 'px'; e.style.left = src[i].x - SB / 2 + 'px'; e.style.top = src[i].y - SB / 2 + 'px';
-    e.style.fontSize = Math.round(SB * 0.5) + 'px'; e.innerHTML = `<b>${v}</b><div class="fill"><b>${v}</b></div>`; e.style.opacity = '0';
+    e.style.fontSize = Math.round(SB * 0.5) + 'px'; e.innerHTML = `<div class="over"><b>${v}</b></div><div class="fill"><b>${v}</b></div>`; e.style.opacity = '0';
     return e;
   });
-  const fills = srcs.map(e => e.querySelector('.fill') as HTMLElement);
   const ans = add(document.createElement('div')); ans.className = 'bnode whole counting'; ans.textContent = '0';
   ans.style.width = ans.style.height = '72px'; ans.style.left = A.x - 36 + 'px'; ans.style.top = A.y - 36 + 'px'; ans.style.opacity = '0'; ans.style.zIndex = '2'; ans.dataset.rest = `${C.x.toFixed(1)},${C.y.toFixed(1)},${(72 * K).toFixed(1)}`; // the counter's resting box (tests)
   const skipHint = add(document.createElement('div')); skipHint.className = 'skiphint'; skipHint.textContent = 'Tap to skip';
@@ -146,7 +145,7 @@ export function teach(ctx: TeachCtx, a: number, b: number): TeachRun {
     /** the glass empties from the top: clip the fill layer down to the share of dots still in the badge */
     const drain = (i: 0 | 1, gone: number, n: number) => {
       if (left[i] === n - gone) return; left[i] = n - gone;
-      fills[i].style.clipPath = `inset(${(100 * gone / n).toFixed(2)}% 0 0 0)`;
+      srcs[i].style.setProperty('--d', `${(100 * gone / n).toFixed(2)}%`); // drives both the fill and the two number copies
     };
     const emptied = (i: number) => {
       srcs[i].classList.add('drained');

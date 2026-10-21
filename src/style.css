@@ -214,9 +214,14 @@ button { font: inherit; color: inherit; border: 0; background: none; padding: 0;
 .bnode.whole.counting.flash, .bnode.whole.counting.c1.flash { box-shadow: 0 0 0 4px var(--green), 0 0 0 9px rgba(34, 197, 94, .18), var(--shadow); }
 /* v0.3.3.1 (GD): source badges either side of the counter; the fill drains top to bottom as the dots leave */
 .fx .srcb { border-radius: 50%; background: var(--card); box-shadow: var(--shadow); display: grid; place-items: center; font-family: var(--f-display); font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; }
-.fx .srcb > b, .fx .srcb .fill > b { font: inherit; }
-.fx .srcb.p0 > b { color: #5287ea; } .fx .srcb.p1 > b { color: var(--blue); }
-.fx .srcb .fill { position: absolute; inset: 0; border-radius: 50%; display: grid; place-items: center; color: #fff; clip-path: inset(0 0 0 0); }
+/* v0.3.4.1: the number is drawn twice in the same spot, both clipped by --d (the drained share, set per dot): the copy on
+   the fill is white and clipped to the fill; the copy above it is clipped to the emptied (white) part: #3a7bff on the right
+   badge, #9cc0ff with an ink outline on the left badge. They split exactly at the fill line. */
+.fx .srcb { --d: 0%; }
+.fx .srcb .over > b, .fx .srcb .fill > b { font: inherit; }
+.fx .srcb .over { position: absolute; inset: 0; border-radius: 50%; display: grid; place-items: center; clip-path: inset(0 0 calc(100% - var(--d)) 0); }
+.fx .srcb.p0 .over { color: var(--lblue); -webkit-text-stroke: 2.5px var(--ink); paint-order: stroke fill; } .fx .srcb.p1 .over { color: var(--blue); }
+.fx .srcb .fill { position: absolute; inset: 0; border-radius: 50%; display: grid; place-items: center; color: #fff; clip-path: inset(var(--d) 0 0 0); }
 .fx .srcb.p0 .fill { background: var(--lblue); } .fx .srcb.p1 .fill { background: var(--blue); }
 .fx .srcb.drained { box-shadow: inset 0 0 0 3px currentColor; } .fx .srcb.drained .fill { display: none; }
 .fx .srcb.p0.drained { color: #5287ea; } .fx .srcb.p1.drained { color: var(--blue); }
