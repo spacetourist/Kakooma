@@ -25,7 +25,7 @@ const shot = n => page.screenshot({ path: `${SHOTS}${TAG}-${n}.png` });
 const kk = (f, a) => page.evaluate(f, a);
 const wait = ms => page.waitForTimeout(ms);
 async function tapEl(sel) { const bb = await page.locator(sel).first().boundingBox(); await page.touchscreen.tap(bb.x + bb.width / 2, bb.y + bb.height / 2); }
-const waitPlay = (t = 9000) => page.waitForFunction(() => window.__kk.phase === 'play', null, { timeout: t });
+const waitPlay = (t = 15000) => page.waitForFunction(() => window.__kk.phase === 'play', null, { timeout: t });
 const fonts = () => page.waitForFunction(() => document.fonts.status === 'loaded');
 const st = () => kk(() => ({ lv: window.__kk.lv, n: window.__kk.n, phase: window.__kk.phase, nums: window.__kk.puzzle?.nums ?? null }));
 const solveOne = async () => { const i = await kk(() => window.__kk.puzzle.nums.indexOf(window.__kk.puzzle.answer)); await tapEl(`.tile[data-i="${i}"]`); await waitPlay(); };
@@ -169,7 +169,7 @@ async function teachShot(lv, n, puzzle, name, waitStage) {
   const info = await kk(() => { const b = document.querySelector('#fx').getBoundingClientRect(); const fs = [...document.querySelectorAll('#fx .tf')].map(f => f.getBoundingClientRect());
     return { frames: fs.length, rows: new Set(fs.map(f => Math.round(f.top))).size, inside: fs.every(f => f.left >= b.left - 1 && f.right <= b.right + 1 && f.top >= b.top - 1 && f.bottom <= b.bottom + 1), w: [...new Set(fs.map(f => Math.round(f.width)))], ten: document.querySelectorAll('#fx .tf.ten').length, caps: [...document.querySelectorAll('#fx .tcap:not(.bondcap)')].map(c => c.textContent) }; });
   await shot(name);
-  await page.waitForFunction(() => window.__kk.phase === 'play', null, { timeout: 9000 });
+  await page.waitForFunction(() => window.__kk.phase === 'play', null, { timeout: 15000 });
   return info;
 }
 let t = await teachShot('easy', 4, { nums: [3, 7, 10, 1], a: 3, b: 7, answer: 10 }, '07-teach-easy-3-7', 'counted');

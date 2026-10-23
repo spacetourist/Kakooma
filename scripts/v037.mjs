@@ -44,7 +44,7 @@ await page.screenshot({ path: `${SHOTS}/${TAG}v037-menu-375x667.png` });
 check(sm.fit && sm.h >= 44, `375x667: switch (${sm.h} px) and Start on screen (Leaderboard was already below the fold here in v0.3.6.2)`);
 await page.setViewportSize({ width: 390, height: 844 }); await wait(200);
 
-// 2. OFF: 5 solves (streak 3 and 5 get the held-board shower)
+// 2. OFF: 5 solves (v0.3.8: no confetti, no held board; the ~700 ms board reset after every beat)
 async function solves(n, shots) {
   const out = [];
   for (let k = 1; k <= n; k++) {
@@ -67,17 +67,17 @@ async function solves(n, shots) {
 await kk(p => { window.__kkNext = [p]; }, P1);
 await page.goto(BASE + '?level=easy&round=600'); await page.waitForFunction(() => document.fonts.status === 'loaded');
 await kk(p => { window.__kkNext = [p]; }, P1); await tapEl('#mStart'); await waitPlay(); await wait(400);
-const OFF = await solves(5, { 1: [[300, 'v037-off-beat-0300.png'], [600, 'v037-off-beat-0600.png'], [1200, 'v037-off-next-board.png']], 3: [[600, 'v037-off-streak3-0600.png'], [1300, 'v037-off-streak3-shower-1300.png']] });
+const OFF = await solves(5, { 1: [[300, 'v037-off-beat-0300.png'], [600, 'v037-off-beat-0600.png'], [1900, 'v037-off-next-board.png']], 3: [[600, 'v037-off-streak3-0600.png'], [1300, 'v037-off-streak3-reset-1300.png']] });
 for (const r of OFF) console.log(`OFF #${r.score} streak ${r.streak}: next board ${r.next} ms | link ${r.link} correct ${r.correct} streak ${r.streakAt} blaze ${r.blaze} | confetti ${r.conf.slice(0, 3)}${r.conf.length > 3 ? '…' + r.conf.length : ''} | ${r.stg}`);
 const bad = ['partPop', 'count', 'total', 'bond', 'caption'];
 check(OFF.every(r => r.tc === 0 && !r.stg.some(g => g !== 'connect') && bad.every(b => !r.names.includes(b))), `OFF: no lesson on any of 5 solves (teachCount 0, only the connect stage); partPop/count/total never fire (sounds: ${[...new Set(OFF.flatMap(r => r.names))].join(',')})`);
 check(OFF.every(r => r.link.length === 1 && r.correct.length === 1 && r.link[0] >= 95 && r.link[0] <= 140), `OFF: link + correct on every solve (link ${OFF.map(r => r.link[0]).join('/')} ms after the tap)`);
 const quick = OFF.filter(r => ![3, 5].includes(r.streak)), held = OFF.filter(r => [3, 5].includes(r.streak));
-check(quick.every(r => r.next >= 980 && r.next <= 1250 && r.conf.some(c => c.startsWith('burst@'))), `OFF: plain solves: connect beat + one confetti burst, next board at ${quick.map(r => r.next).join('/')} ms`);
+check(OFF.every(r => r.next >= 1650 && r.next <= 1950 && !r.conf.length), `OFF (v0.3.8): connect beat + ~700 ms board reset, no confetti and no held board, streaks included; next board at ${OFF.map(r => r.next).join('/')} ms`);
 const cheerAt = r => +(r.blaze.find(b => b.startsWith('cheer')) ?? '@NaN').split('@')[1], showerAt = r => +(r.conf.find(c => c.startsWith('shower')) ?? '@NaN').split('@')[1];
-check(held.every(r => r.next >= 1900 && r.next <= 2300 && Math.abs(cheerAt(r) - showerAt(r)) <= 5 && r.conf.filter(c => c.startsWith('shower')).length >= 3), `OFF: streak 3 and 5: star shower held on the board, cheer on its first burst (${held.map(r => `cheer ${cheerAt(r)} / shower ${showerAt(r)} ms`).join(', ')}), next board at ${held.map(r => r.next).join('/')} ms`);
+check(held.every(r => cheerAt(r) <= 40), `OFF: streak 3 and 5: Blaze cheers at the tap (${held.map(r => `cheer ${cheerAt(r)} ms`).join(', ')})`);
 const h5 = held.find(r => r.streak === 5);
-check(h5 && h5.streakAt.length === 1 && Math.abs(h5.streakAt[0] - cheerAt(h5)) <= 3 && held.find(r => r.streak === 3).streakAt.length === 0, `OFF: streak(5) with the cheer on the first burst (${h5?.streakAt[0]} vs ${cheerAt(h5)} ms); streak 3 has no streak() tier sound (as before)`);
+check(h5 && h5.streakAt.length === 1 && h5.streakAt[0] < 20 && cheerAt(h5) < 40 && held.find(r => r.streak === 3).streakAt.length === 0, `OFF: streak(5) on the tap, cheer the frame after (${h5?.streakAt[0]} vs ${cheerAt(h5)} ms); streak 3 has no streak() tier sound (as before)`);
 // 3. ON (menu tap back on, in the same session): every solve plays the beat + the full lesson; shower inside the lesson at streak 3
 await tapEl('#gQuit'); await page.waitForFunction(() => document.getElementById('play').dataset.mode === 'menu');
 await tapEl('#mLesson'); await wait(200);
@@ -87,7 +87,7 @@ const ON = await solves(5);
 for (const r of ON) console.log(`ON  #${r.score} streak ${r.streak}: next board ${r.next} ms | link ${r.link} correct ${r.correct} streak ${r.streakAt} blaze ${r.blaze} | ${r.stg.join('>')}`);
 check(ON.every(r => r.tc >= 1 && ['connect', 'fly', 'counted', 'bond', 'clear'].every(g => r.stg.includes(g)) && r.names.includes('count') && r.names.includes('total') && r.link.length === 1 && r.correct.length === 1), `ON: beat + full lesson on all 5 solves (incl. #4, which v0.3.6.2 skipped), count/total fire; next board at ${ON.map(r => (r.next / 1000).toFixed(1)).join('/')} s`);
 const s5 = ON.find(r => r.streak === 5), s3 = ON.find(r => r.streak === 3);
-check(s5 && s5.streakAt.length === 1 && s5.streakAt[0] > 3000 && Math.abs(s5.streakAt[0] - cheerAt(s5)) <= 3 && Math.abs(showerAt(s3) - cheerAt(s3)) <= 5 && showerAt(s3) > 3000, `ON: streak 3/5 shower inside the lesson at the bond (streak 3: shower + cheer at ${showerAt(s3)} ms; streak 5: streak(5) + cheer at ${s5?.streakAt[0]} ms)`);
+check(s5 && s5.streakAt.length === 1 && s5.streakAt[0] > 3000 && Math.abs(s5.streakAt[0] - cheerAt(s5)) <= 3 && cheerAt(s3) > 3000 && ON.every(r => !r.conf.length), `ON: streak 3/5 cheer inside the lesson at the bond, no confetti (v0.3.8) (streak 3: cheer at ${cheerAt(s3)} ms; streak 5: streak(5) + cheer at ${s5?.streakAt[0]} ms)`);
 check(errs.length === 0, 'no console errors ' + JSON.stringify(errs));
 console.log([...log, ...fails].join('\n'));
 console.log(fails.length ? `${fails.length} FAILED` : 'ALL V037 CHECKS PASSED');

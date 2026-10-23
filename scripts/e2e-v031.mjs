@@ -30,7 +30,7 @@ const kk = (f, a) => page.evaluate(f, a);
 const wait = ms => page.waitForTimeout(ms);
 const shot = n => page.screenshot({ path: `${SHOTS}${TAG}-${n}.png` });
 async function tapEl(sel) { const bb = await page.locator(sel).first().boundingBox(); await page.touchscreen.tap(bb.x + bb.width / 2, bb.y + bb.height / 2); }
-const waitPlay = () => page.waitForFunction(() => window.__kk.phase === 'play' || window.__kk.phase === 'done', null, { timeout: 9000 });
+const waitPlay = () => page.waitForFunction(() => window.__kk.phase === 'play' || window.__kk.phase === 'done', null, { timeout: 15000 });
 /** play an 8 s round: `solves` correct taps, each after `think` ms of looking at the board; returns the solve times the game recorded */
 async function round(solves, think) {
   await kk(() => { window.__sfxLog = []; });

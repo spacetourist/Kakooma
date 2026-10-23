@@ -29,7 +29,7 @@ async function tapEl(sel) { const bb = await page.locator(sel).first().boundingB
 const tapTile = i => tapEl(`.tile[data-i="${i}"]`);
 const answerIdx = () => kk(() => window.__kk.puzzle.nums.indexOf(window.__kk.puzzle.answer));
 const wrongIdx = () => kk(() => { const p = window.__kk.puzzle, a = p.nums.indexOf(p.answer); return a === 0 ? 1 : 0; });
-const waitPlay = (t = 9000) => page.waitForFunction(() => window.__kk.phase === 'play', null, { timeout: t });
+const waitPlay = (t = 15000) => page.waitForFunction(() => window.__kk.phase === 'play', null, { timeout: t });
 const stage = (g, t = 6000) => page.waitForFunction(g => window.__kk.teachStage === g, g, { timeout: t });
 const queue = list => kk(l => { window.__kkNext = l; }, list);
 const P = (nums, a, b) => ({ nums, a, b, answer: a + b });

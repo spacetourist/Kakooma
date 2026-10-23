@@ -4,7 +4,7 @@
  * draws itself with confetti. Transforms + WAAPI only. teach() returns { done, cancel }: cancel() ends it at once (quit / round end only; v0.3.6 has no tap-to-skip).
  */
 import { planTeach, countTiming, type Plan, type Pace } from './plan';
-import { confetti, shower, reducedMotion } from './fx';
+import { reducedMotion } from './fx';
 import { sfx, stopAll } from './sfx';
 
 export interface TeachCtx {
@@ -16,8 +16,8 @@ export interface TeachCtx {
   onStage?: (s: string) => void; // progress hook (tests / analytics)
   onTen?: (n: number) => void;   // v0.3.5: a frame completes (n = running count: 10, 20, ...), on the ring/flash frame
   pace?: Pace;                   // v0.3.2: counting speed by level (default medium)
-  big?: boolean;                 // v0.3.5.1: streak 3/5/10 or a new #1: the star shower replaces the bond burst
-  onShower?: () => void;         // v0.3.5.2: called on the frame the shower's first burst fires (the deferred streak sound)
+  big?: boolean;                 // v0.3.5.1: streak 3/5/10 or a new #1 (v0.3.8: no shower; onShower still fires at the bond)
+  onShower?: () => void;         // v0.3.5.2: called on the bond's cheer frame (where the shower's first burst used to fire): the deferred streak sound + cheer
 }
 export interface TeachRun { done: Promise<void>; cancel: () => void; plan: Plan }
 
@@ -255,11 +255,11 @@ export function teach(ctx: TeachCtx, a: number, b: number): TeachRun {
     if (await wait(R)) return;
     ctx.onStage?.('bond');
     if (await wait(tCap)) return;
-    // the caption has landed and the bond is complete: one confetti burst onto the finished bond, Blaze hops
+    // the caption has landed and the bond is complete: cheer() + Blaze hops
     ctx.onStage?.('cheer'); sfx.caption(); sfx.cheer();
-    // v0.3.5.1: a normal solve gets the two inward bursts at the bond centre; a big moment (streak 3/5/10, new #1) gets
-    // the star shower here instead, inside the lesson, so it has passed before the next board appears
-    if (ctx.big) shower(ctx.onShower); else confetti(layer, W.x, (W.y + P[0].y) / 2);
+    // v0.3.8: no confetti and no star shower any more (the bond burst and the big-moment shower are gone); a big moment
+    // (streak 3/5/10, new #1) still fires its deferred streak(n) + Blaze's cheer here, on the same frame as before
+    if (ctx.big) ctx.onShower?.();
     if (!reduced) ctx.onHop();
     if (await wait(tClear - tCap)) return; // hold: 2.5 s of reading after the caption lands
     // clear: the bond fades, then teach ends and the caller restores "? + ? = ?" and shows the next board

@@ -21,17 +21,18 @@ const kk = (f, a) => page.evaluate(f, a), wait = ms => page.waitForTimeout(ms);
 const tapEl = async sel => { const bb = await page.locator(sel).first().boundingBox(); await page.touchscreen.tap(bb.x + bb.width / 2, bb.y + bb.height / 2); };
 const waitPlay = (t = 20000) => page.waitForFunction(() => window.__kk.phase === 'play' && !window.__kk.teach, null, { timeout: t });
 const ansI = () => kk(() => window.__kk.puzzle.nums.indexOf(window.__kk.puzzle.answer));
-const S = () => kk(() => ({ score: window.__kk.score, miss: window.__kk.miss, phase: window.__kk.phase, teach: !!window.__kk.teach, stage: window.__kk.teachStage, picks: window.__sfxLog.filter(e => ['correct', 'wrong'].includes(e[0])).length }));
+const S = () => kk(() => ({ score: window.__kk.score, miss: window.__kk.miss, phase: window.__kk.phase, teach: !!window.__kk.teach, stage: window.__kk.teachStage, rs: window.__kk.resetStage, picks: window.__sfxLog.filter(e => ['correct', 'wrong'].includes(e[0])).length }));
 const P1 = { nums: [3, 7, 10, 2, 9], a: 3, b: 7, answer: 10 }, P2 = { nums: [4, 8, 1, 12, 6], a: 4, b: 8, answer: 12 };
 /** the live board is P1; P2 (answer at index 3) comes next. Tap P1's answer, then hammer the board, including the
  *  slot where P2's answer will appear, through `ms`; return the state on the next board after 600 ms */
 async function hammer(ms) {
   await kk(p => { window.__kkNext = [p]; }, P2);
   await kk(() => { window.__taps = []; window.__h0 = performance.now() + 30; window.__readyAt = Infinity; if (!window.__tapL) { window.__tapL = 1; document.addEventListener('pointerdown', () => window.__taps.push(performance.now()), true); }
-    const f = () => { if (window.__kk.phase === 'play' && !window.__kk.teach && performance.now() > window.__h0 + 100) window.__readyAt = performance.now(); else requestAnimationFrame(f); }; requestAnimationFrame(f); });
+    let left = false; const f = () => { if (window.__kk.phase !== 'play') left = true; if (left && window.__kk.phase === 'play' && !window.__kk.teach) window.__readyAt = performance.now(); else requestAnimationFrame(f); }; requestAnimationFrame(f); }); // v0.3.8: ready = back in play after the solve (the end of the board reset)
   await tapEl(`.tile[data-i="${await ansI()}"]`); const t0 = Date.now(), s0 = await S();
+  await kk(() => { window.__h0 = performance.now(); }); // after the solve's own pick has landed (it must not count as a late pick)
   const seen = new Set(); let n = 0;
-  while (Date.now() - t0 < ms) { const st = await S(); seen.add(st.stage || st.phase); if (st.phase === 'play' && !st.teach) break;
+  while (Date.now() - t0 < ms) { const st = await S(); seen.add(st.stage || st.rs || st.phase); if (st.phase === 'play' && !st.teach) break; if (st.rs === 'emerge') break; // v0.3.8: stop at the emerge so no test tap races the board coming back (scripts/v038.mjs taps through the emerge)
     await tapEl(['.tile[data-i="3"]', '.tile[data-i="0"]', '#board', '.tile[data-i="1"]'][n++ % 4]); await wait(120); }
   await waitPlay(); const ready = Date.now() - t0; await wait(600);
   // a tap the test issued just as the board came back may land on it legitimately; what must never happen is a pick

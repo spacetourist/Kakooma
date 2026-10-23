@@ -1,5 +1,7 @@
 // v0.3.5.2 (AE): streak(n) on the same frame as the star shower's first burst (in the lesson, and on the held board
 // with no lesson); correct() stays on the tap; x20 (no shower) and reduced motion keep streak on the tap.
+// v0.3.8: no showers and no held board any more: in the lesson streak(n) + cheer fire on the bond's cheer frame (with
+// caption()), with no lesson they fire at the tap; x20 and reduced motion as before.
 // node scripts/streak-v0352.mjs [baseUrl]. Prints the timing log.
 import { createServer } from 'http';
 import { readFileSync, existsSync, statSync } from 'fs';
@@ -38,27 +40,27 @@ async function playTo(to) {
 }
 const timing = () => kk(() => { const t0 = window.__tapT, L = window.__sfxLog, c = window.__kkConfetti || [];
   const at = n => { const e = L.find(e => e[0] === n); return e ? Math.round(e[2] - t0) : null; };
-  const ch = L.find(e => e[0] === 'blaze' && e[3] === 'cheer');
-  return { branch: !!window.__kkReact, cheer: ch ? Math.round(ch[2] - t0) : null, correct: at('correct'), streak: at('streak'), streakN: (L.find(e => e[0] === 'streak') || [])[1], shower1: c.find(e => /^shower/.test(e[0])) ? Math.round(c.find(e => /^shower/.test(e[0]))[1] - t0) : null, stage: window.__kk.teachStage }; });
+  const ch = L.find(e => e[0] === 'blaze' && e[3] === 'cheer'), cap = L.find(e => e[0] === 'caption');
+  return { branch: !!window.__kkReact, cheer: ch ? Math.round(ch[2] - t0) : null, correct: at('correct'), streak: at('streak'), streakN: (L.find(e => e[0] === 'streak') || [])[1], shower1: c.find(e => /^shower/.test(e[0])) ? Math.round(c.find(e => /^shower/.test(e[0]))[1] - t0) : null, caption: cap ? Math.round(cap[2] - t0) : null, stage: window.__kk.teachStage }; });
 // (streak(n) and Blaze's cheer run in the same synchronous task as the first burst, just before it is fired + logged;
 //  the cheer swap costs ~1-2 ms, hence a 3 ms tolerance)
-// A: x5 in the lesson (default teach: milestone -> full lesson; shower at the bond)
+// A: x5 in the lesson (default teach: milestone -> full lesson; streak(5) + cheer at the bond, with caption())
 await open('?round=600&level=easy');
 await tapEl('#mStart'); await playTo(5);
-await page.waitForFunction(() => (window.__kkConfetti || []).some(e => /^shower/.test(e[0])), null, { timeout: 15000 });
+await page.waitForFunction(() => window.__sfxLog.some(e => e[0] === 'streak'), null, { timeout: 15000 });
 let a = await timing();
-check(a.correct < 20 && a.streakN?.[0] === 5 && a.shower1 > 1000 && Math.abs(a.streak - a.shower1) <= 3, `x5 lesson: correct at +${a.correct} ms (tap), shower's first burst at +${a.shower1} ms, streak(5) at +${a.streak} ms (same tick)`);
+check(a.correct < 20 && a.streakN?.[0] === 5 && a.caption > 1000 && Math.abs(a.streak - a.caption) <= 3 && a.shower1 === null, `x5 lesson: correct at +${a.correct} ms (tap), caption at +${a.caption} ms, streak(5) at +${a.streak} ms (same tick), no shower (v0.3.8)`);
 if (a.branch) check(Math.abs(a.cheer - a.streak) <= 1, `x5 lesson: blaze('cheer') + pose swap at +${a.cheer} ms, with streak(5)`);
-// B: x5 / x10 with no lesson (teach=quick): the held-board shower at 0.5 s
+// B: x5 / x10 with no lesson (teach=quick): v0.3.8: no held board, streak(n) + cheer at the tap
 await open('?round=600&level=easy&teach=quick');
 await tapEl('#mStart'); await playTo(5);
 let b = await timing();
-check(b.correct < 20 && b.streakN?.[0] === 5 && Math.abs(b.shower1 - 500) < 60 && Math.abs(b.streak - b.shower1) <= 3, `x5 no lesson: correct at +${b.correct} ms, shower's first burst at +${b.shower1} ms, streak(5) at +${b.streak} ms`);
-if (b.branch) check(Math.abs(b.cheer - b.streak) <= 1, `x5 held board: blaze('cheer') + pose swap at +${b.cheer} ms, with streak(5)`);
+check(b.correct < 20 && b.streakN?.[0] === 5 && b.streak < 20 && b.shower1 === null, `x5 no lesson: correct at +${b.correct} ms, streak(5) at +${b.streak} ms (the tap), no shower`);
+if (b.branch) check(b.cheer !== null && b.cheer < 40, `x5 no lesson: blaze('cheer') + pose swap at +${b.cheer} ms (the frame after the tap)`);
 await playTo(5); // streak 10
 let b10 = await timing();
-check(b10.streakN?.[0] === 10 && Math.abs(b10.streak - b10.shower1) <= 3, `x10 no lesson: shower's first burst at +${b10.shower1} ms, streak(10) at +${b10.streak} ms`);
-if (b10.branch) check(Math.abs(b10.cheer - b10.streak) <= 1, `x10 held board: blaze('cheer') at +${b10.cheer} ms, with streak(10)`);
+check(b10.streakN?.[0] === 10 && b10.streak < 20 && b10.shower1 === null, `x10 no lesson: streak(10) at +${b10.streak} ms (the tap), no shower`);
+if (b10.branch) check(b10.cheer !== null && b10.cheer < 40, `x10 no lesson: blaze('cheer') at +${b10.cheer} ms`);
 // C: x20 (no shower): streak stays on the tap
 await playTo(10);
 let c = await timing();
@@ -75,19 +77,18 @@ await open('?round=600&level=easy');
 await tapEl('#mStart');
 for (let s = 1; s <= 5; s++) { await waitPlay(); await wait(150); if (s === 5) await kk(() => { window.__sfxLog.length = 0; (window.__kkConfetti || []).length = 0; window.__e0 = performance.now(); /* the app stamps __tapT on every tap, ignored ones too */ }); await tapAnswer(); if (s === 5) for (let k = 0; k < 12; k++) { await wait(500); await page.touchscreen.tap(195, 600); } }
 await waitPlay(); await wait(200);
-const e = await kk(() => ({ s: window.__sfxLog.filter(e => e[0] === 'streak').map(e => [e[1][0], Math.round(e[2] - window.__e0)]), sh: (window.__kkConfetti || []).filter(e => /^shower/.test(e[0])).map(e => Math.round(e[1] - window.__e0))[0], stop: window.__sfxLog.some(e => e[0] === 'stopAll'), score: window.__kk.score }));
-check(e.s.length === 1 && e.s[0][0] === 5 && Math.abs(e.s[0][1] - e.sh) <= 1 && !e.stop && e.score === 5, `x5 lesson tapped 12x: not skipped (no stopAll), streak(5) once at +${e.s[0]?.[1]} ms on the shower (+${e.sh} ms), score ${e.score}`);
+const e = await kk(() => ({ s: window.__sfxLog.filter(e => e[0] === 'streak').map(e => [e[1][0], Math.round(e[2] - window.__e0)]), sh: (window.__kkConfetti || []).filter(e => /^shower/.test(e[0])).map(e => Math.round(e[1] - window.__e0))[0], cap: window.__sfxLog.filter(e => e[0] === 'caption').map(e => Math.round(e[2] - window.__e0))[0], stop: window.__sfxLog.some(e => e[0] === 'stopAll'), score: window.__kk.score }));
+check(e.s.length === 1 && e.s[0][0] === 5 && Math.abs(e.s[0][1] - e.cap) <= 3 && e.sh === undefined && !e.stop && e.score === 5, `x5 lesson tapped 12x: not skipped (no stopAll), streak(5) once at +${e.s[0]?.[1]} ms with the caption (+${e.cap} ms), no shower, score ${e.score}`);
 if (await kk(() => !!window.__kkReact)) {
   const f = await kk(() => { const s = window.__sfxLog.find(e => e[0] === 'streak'), c = window.__sfxLog.find(e => e[0] === 'blaze' && e[3] === 'cheer'); return { s: s && Math.round(s[2]), c: c && Math.round(c[2]), n: window.__sfxLog.filter(e => e[0] === 'blaze' && e[3] === 'cheer').length }; });
   check(f.n === 1 && Math.abs(f.c - f.s) <= 1, `x5 lesson tapped: cheer fires once, with streak(5) (${JSON.stringify(f)})`);
-  // round ends while the cheer is pending: dropped
-  // (held board, no lesson: Quit is reachable during the beat; the shower would start at +0.5 s)
-  await open('?round=600&level=easy&teach=quick');
+  // round ends while the cheer is pending (mid-lesson, before the bond): dropped
+  await open('?round=600&level=easy');
   await tapEl('#mStart');
   for (let s = 1; s <= 5; s++) { await waitPlay(); await wait(150); if (s === 5) await kk(() => { window.__sfxLog.length = 0; }); await tapAnswer(); if (s < 5) await wait(1150); }
-  await wait(200); await tapEl('#gQuit'); await wait(1500);
+  await wait(1500); await tapEl('#gQuit'); await wait(8000);
   const g = await kk(() => ({ streak: window.__sfxLog.filter(e => e[0] === 'streak').length, cheer: window.__sfxLog.filter(e => e[0] === 'blaze' && e[3] === 'cheer').length, phase: window.__kk.phase }));
-  check(g.streak === 0 && g.cheer === 0 && g.phase === 'menu', `x5 then quit before the shower: deferred streak + cheer dropped ${JSON.stringify(g)}`);
+  check(g.streak === 0 && g.cheer === 0 && g.phase === 'menu', `x5 lesson, quit before the bond: deferred streak + cheer dropped ${JSON.stringify(g)}`);
 }
 check(errs.length === 0, 'no console errors ' + JSON.stringify(errs));
 console.log(log.join('\n')); if (fails.length) console.log(fails.join('\n'));

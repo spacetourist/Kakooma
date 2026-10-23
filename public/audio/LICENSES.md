@@ -1,10 +1,10 @@
-# Kakooma sound pack v02 / v02b / v02c / v03: sources and licences
+# Kakooma sound pack v02 / v02b / v02c / v03 / v04: sources and licences
 
 Every sound in `dist/kk_sfx.ogg` / `dist/kk_sfx.m4a` is built only from the recordings below, and **all of them are CC0 1.0**
 (public domain dedication). No attribution is needed, but credits are listed anyway. Nothing used needs a sign-up or payment
 (Freesound HQ previews download without an account; GitHub, BigSoundBank and Kenney are open downloads).
 Synthesis is **not** used for any audible layer; the only generated signal is the 2 ms sync marker, which is never played.
-Processing (resampling to pitch, filters, envelopes, transient shave, mixing, baked limiting) is in `tools/build.py` and `tools/sprite.py`.
+Processing (resampling to pitch, filters, envelopes, transient shave, mixing, baked limiting) is in `tools/build.py`, `tools/build_v04.py` and `tools/sprite.py`.
 Licence texts and page evidence are in `src/licences/`. The Freesound pages were checked from this box on 2026-10-20 (each shows
 the CC0 1.0 licence link); the full download log, including descriptions, is `tools/fs_sources.tsv`.
 
@@ -22,7 +22,9 @@ the CC0 1.0 licence link); the full download log, including descriptions, is `to
 | 10 | `vsco/LLVln_Pizz_{G4,C5,E5,A5,E6,A6}_f_RR1.wav`, `LLVln_Pizz_C7_f.wav` | VSCO-2-CE `Strings/Solo Violin/Pizz/`, https://github.com/sgossner/VSCO-2-CE | Versilian Studios (Sam Gossner) | CC0 1.0, repo `LICENSE` → `src/licences/VSCO-2-CE_LICENSE.txt` | soft pizzicato "body" under the pops: correct, wrong, roundStart, lowTime, timeUp, streak_*, newBest, hop, makeTen, partPop_*, pulse_*, labPair_*, star, quizStart |
 | 11 | `vsco/Marimba_hit_Outrigger_{F3,C4,G4,B4,F5,C6}_loud_01.wav` | VSCO-2-CE `Percussion/Marimba/` (same repo) | Versilian Studios | CC0 1.0 (same) | light wood body only: wrong, roundStart, timeUp, newBest, count_*, makeTen, pulse_* |
 | 12 | `bsb/bsb_0648.mp3` "Champagne cork #2" | BigSoundBank https://bigsoundbank.com/champagne-cork-2-s0648.html | Joseph Sardin | CC0 (page: "CC0 (public domain)"), `src/licences/bigsoundbank_s0648_page.txt` | the cork / mouth "pop!": cheer, star, roundStart, timeUp, streak_10/20, newBest, makeTen |
-| 13 | `kenney/casino-audio__card-fan-1.ogg` | Kenney "Casino Audio" https://kenney.nl/assets/casino-audio | Kenney | CC0, `src/licences/kenney_casino-audio_License.txt` | cheer only (a faint confetti rustle, −14 dB under the cork) |
+| 13 | `kenney/casino-audio__card-fan-1.ogg` | Kenney "Casino Audio" https://kenney.nl/assets/casino-audio | Kenney | CC0, `src/licences/kenney_casino-audio_License.txt` | cheer only (a faint papery rustle, −14 dB under the cork) |
+| 14 | `fs/186956_woosh.ogg` (**v04**) | https://freesound.org/people/ReadeOnly/sounds/186956/ | ReadeOnly | CC0 1.0, `src/licences/freesound_186956.txt` (page checked 2026-10-23; also CC0-OK in the Radcars log) | the airy whoosh: falling (collapse) and rising (emerge) |
+| 15 | `fs/389626_Bubbles_Short_1.ogg` (**v04**) | https://freesound.org/people/SilentStrikeZ/sounds/389626/ | SilentStrikeZ | CC0 1.0, `src/licences/freesound_389626.txt` (page checked 2026-10-23) | the water gurgle under collapse |
 
 **v02b:** the new `countTen` accent uses no new files. It is built from #4 (qubodup "Mouth Pop", Freesound 188797, a plop
 tuned to C5) and #10 (VSCO-2-CE pizzicato C5 and A5 → C6). All are CC0 and already listed above.
@@ -38,6 +40,19 @@ and #6-#8 (water blips for the fizz), plus #10 (VSCO-2-CE pizzicato). All are CC
 
 No synthesised layer was added.
 
+**v04:** `collapse`, `emerge` and `hop_0..2` add **two new recordings** (#14 and #15, both CC0 1.0). Everything else comes from files already listed:
+- **`collapse`:** whoosh #14 (a 290 ms slice, low-pass gliding 5.5 kHz → 700 Hz, tapering), gurgle #15 (band-limited, falling
+  low-pass), three mouth plops A5 G5 E5 from #3 CapsLok 181907, and the low bloop C5 = a #6 giddster 387952 straw blip
+  (−12.7 semitones) + a #5 ScratchnSniff 242113 "pop or bloop" (−6.6 semitones).
+- **`emerge`:** whoosh #14 (low-pass gliding 900 Hz → 6 kHz) under six pops G5..G6, each a #6 straw blip with a quieter #3 mouth plop under it.
+- **`hop_0..2`:** one low bloop each (C5 / A4 / G4) = a #6 straw blip + a #5 "pop or bloop" at the same pitch. These are large
+  downward pitch shifts (blip −12.7 / −15.7 / −17.7 semitones, bloop −6.6 / −9.6 / −11.6), which is what makes them round and soft.
+- So the new clips use #3, #5, #6, #14 and #15 only. (`wav/_stage_notes.json` `used_v04_new` lists every file the build loaded,
+  which includes the pop pool. The per-layer source and pitch shift of every new layer are in its `tuning` list.)
+- **No synthesis** in any v04 clip. The only generated signal in the file is still the sync marker.
+- **Dropped from the sprite (v04):** `makeTen`, `clear` and v02's `hop`. Their sources stay listed above because other sprites use them.
+
+
 Freesound files are the site's HQ previews (OGG ~192 kb/s, or MP3 for a few), not the original uploads. That's plenty for
 pops this short, which are then encoded at 36 kb/s Opus anyway (43 kb/s constrained in v03).
 
@@ -45,7 +60,7 @@ pops this short, which are then encoded at 36 kb/s Opus anyway (43 kb/s constrai
 and wood clicks; Kenney interface drop / RPG page-flip / cloth; OGA plop and paper; Freesound #683101 woosh.
 
 **Downloaded but not used** (kept in `src/` for later tuning, all CC0 and checked on their pages, see `tools/fs_sources.tsv`):
-Freesound 258269, 47498, 168861, 683100, 683102, 174718, 273870, 156907, 166986, 611642, 389626, 392624, 335358, 676000,
+Freesound 258269, 47498, 168861, 683100, 683102, 174718, 273870, 156907, 166986, 611642, 392624, 335358, 676000,
 664872, 447910, 32264, 56036, 868713; VSCO-2-CE KSHarp A4/C5/A6/D6 and the `p` pizz layers; Kenney interface drops; OGA plops.
 
 Fonts in the preview MP4 only: DejaVu Sans (Bitstream Vera / DejaVu licence, system font). They aren't shipped.

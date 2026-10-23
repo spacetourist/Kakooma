@@ -1,5 +1,5 @@
 /**
- * Sound hooks (v0.3.4): the Audio Engineer's pack (src/kkaudio.ts, sound pack v03 since v0.3.6), wired in. Every existing
+ * Sound hooks (v0.3.4): the Audio Engineer's pack (src/kkaudio.ts, sound pack v03 since v0.3.6, v04 since v0.3.8), wired in. Every existing
  * `import { sfx } from './sfx'` keeps working. This thin layer adds three things on top of the pack:
  *  - the mute setting (saved in localStorage 'kk.mute'): muting goes through the same path as stopAll() (everything
  *    playing or scheduled fades out) and every later hook is ignored while muted;
@@ -18,7 +18,9 @@ let muted = (() => { try { return localStorage.getItem(MUTE_KEY) === '1'; } catc
 const log = (name: string, args: unknown[]) => {
   const L = (window as any).__sfxLog; if (!L) return;
   const o = args.find(a => a && typeof a === 'object') as Opts;
-  L.push([name, args.filter(a => typeof a === 'number'), performance.now() + (o?.delay ?? 0) * 1000]);
+  const e: any = [name, args.filter(a => typeof a === 'number'), performance.now() + (o?.delay ?? 0) * 1000];
+  if (o) e.opts = o; // tests read the options in-page (e.g. emerge's gainDb), the array itself stays [name, nums, firesAtMs]
+  L.push(e);
 };
 /** v0.3.6: Blaze's poses (sound pack v03). ONE hook for all of them, fired on the frame the pose swaps in. */
 export type BlazePose = kk.BlazeKind;
@@ -37,6 +39,11 @@ sfx.blaze = (pose: BlazePose, o?: kk.PlayOpts) => {
   if (L?.length) { const e = L[L.length - 1]; e.push(pose, e[2] + (kk.BLAZE_OFFSET[pose] ?? 0) * 1000); }
   if (!muted) kk.sfx.blaze(pose, o);
 };
+
+/** v0.3.8 (sound pack v04): collapse(), emerge() and hop() are the pack's own hooks, forwarded by the generic wrapper
+ *  above (logged, played unless muted). collapse() fires on the reset's first frame, emerge() 340 ms later on the emerge's
+ *  first frame (reduced motion: emerge({ gainDb: -3 }) only), hop() on Blaze's ordinary-solve hop (the pack rotates its 3
+ *  landing plops, never the same twice, 190 ms after the call). makeTen() and clear() are retired silent no-ops. */
 
 /** v0.3.3: the counter tile turns green on the final count (150 ms after partPop(1)) */
 export function total(o?: kk.PlayOpts): void { sfx.total(o); }

@@ -1,7 +1,8 @@
 import './style.css';
 import { generate, sumKey, type Puzzle, type Level, LEVELS, CAP, LEVEL_NAME, isLevel, supports } from './puzzle';
 import { teach, type TeachRun } from './teach';
-import { haptic, ripple, reducedMotion, shower, confetti, preloadConfetti, SHOWER } from './fx';
+import { haptic, ripple, reducedMotion, shower, confetti, preloadConfetti } from './fx';
+import { SOLVE_FX, BLAZE_HOP, RESET, outBack, backFor, timeAt } from './motion';
 import { sfx, initAudio, isMuted, setMuted, whenRunning } from './sfx';
 import { initLab } from './lab';
 import { blazeCtl, preloadPoses, poseSrc, POSES, WHOA_ON, type Pose } from './blaze';
@@ -15,7 +16,6 @@ const Q = new URLSearchParams(location.search);
 const ROUND_MS = Math.max(5, Math.min(600, Number(Q.get('round')) || 60)) * 1000;
 const PENALTY_MS = 3000;          // wrong tap
 /** v0.3.5 connect beat (GD): the correct-answer reveal, same on every level; the round timer is PAUSED for it */
-const SHOWER_PEAK = 300; // ms after the last shower burst before the next board may appear
 const CONNECT = { pop: 150, lineAt: 100, line: 400, pulseAt: 500, pulse: 200, fadeAt: 850, fade: 150, end: 1000 };
 const SLIDE_MS = 250;             // picker change: tiles slide to the new corners
 /** v0.3: boards are per level + number count (kk.board.v2); v1 (no level) is migrated once to Hard and left in place as a backup. */
@@ -35,7 +35,7 @@ const st = {
   phase: 'menu' as Phase, n: 5, lv: 'easy' as Level, lastKey: '', puzzle: null as Puzzle | null,
   left: ROUND_MS, since: 0, running: false,
   score: 0, miss: 0, streak: 0, best: 0, solve: [] as number[], solved: [] as Solved[], shownAt: 0, pausedAt: 0,
-  prevBest: 0, teach: null as { cancel: () => void } | null, teachCount: 0, lesson: localStorage.getItem('kk.lesson') !== '0', teachStage: '', seen: new Set<string>(), badTiles: new Set<number>(), timers: new Set<number>(), run: 0,
+  prevBest: 0, teach: null as { cancel: () => void } | null, resetStage: '', teachCount: 0, lesson: localStorage.getItem('kk.lesson') !== '0', teachStage: '', seen: new Set<string>(), badTiles: new Set<number>(), timers: new Set<number>(), run: 0,
 };
 (window as any).__kk = st;
 
@@ -49,7 +49,7 @@ function later(fn: () => void, ms: number) {
   const h = window.setTimeout(() => { st.timers.delete(h); if (st.run === run) fn(); }, ms);
   st.timers.add(h);
 }
-function cancelTimers() { for (const h of st.timers) clearTimeout(h); st.timers.clear(); st.teach?.cancel(); idleStop(); pendingStreak = 0; pendingCheer = 0; }
+function cancelTimers() { for (const h of st.timers) clearTimeout(h); st.timers.clear(); st.teach?.cancel(); resetCtl?.cancel(); idleStop(); pendingStreak = 0; pendingCheer = 0; }
 const esc = (s: string) => s.replace(/[&<>"']/g, c => `&#${c.charCodeAt(0)};`);
 
 // ---------- version ----------
@@ -109,11 +109,14 @@ function layout(n: number, ms: number) {
 }
 addEventListener('resize', () => layout(shownN || st.n, 0));
 
+/** v0.3.8: each tile's number sits in its own <span class="n"> so the board reset can fade it in on its own */
+function setNum(t: HTMLElement, v: string) { if (!v) { t.textContent = ''; return; } const n = document.createElement('span'); n.className = 'n'; n.textContent = v; t.replaceChildren(n); }
+const clearTicks = () => { for (const e of board.querySelectorAll('.tick')) e.remove(); };
 function showPuzzle(p: Puzzle, pop: boolean) {
-  st.puzzle = p;
+  st.puzzle = p; clearTicks();
   for (let i = 0; i < MAX; i++) {
     const t = tiles[i];
-    t.className = 'tile'; t.textContent = i < p.nums.length ? String(p.nums[i]) : '';
+    t.className = 'tile'; setNum(t, i < p.nums.length ? String(p.nums[i]) : '');
     if (pop && i < p.nums.length) t.animate([{ transform: 'scale(.85)', opacity: 0.3 }, { transform: 'scale(1)', opacity: 1 }],
       { duration: 220, delay: i * 30, easing: 'cubic-bezier(.34,1.56,.64,1)', fill: 'backwards' });
   }
@@ -168,6 +171,14 @@ function idleStop() { clearTimeout(idleT); if (!FORCE && bz.current() === 'think
 preloadPoses().then(() => { if (FORCE) bz.react(FORCE, { hold: true }); });
 (window as any).__kkReact = (p: Pose, o?: { sparks?: number; hold?: boolean }) => bz.react(p, o);
 (window as any).__kkBlazeState = () => ({ ...bzs, current: bz.current() });
+/** v0.3.8: every solve, a small hop (BLAZE_HOP: up 8 px and down in 240 ms, squash on landing), added on top of whatever
+ *  Blaze is doing (bob, a pose's own motion), so it never fights a reaction. Reduced motion: none. */
+function solveHop() {
+  if (reducedMotion()) return;
+  const H = BLAZE_HOP, [sx, sy] = H.squash;
+  blazeBody.animate([{ transform: 'translateY(0) scale(1, 1)', easing: 'ease-out' }, { transform: `translateY(-${H.px}px) scale(.97, 1.04)`, offset: H.upAt, easing: 'ease-in' },
+    { transform: `translateY(0) scale(${sx}, ${sy})`, offset: H.landAt, easing: 'ease-out' }, { transform: 'translateY(0) scale(1, 1)' }], { duration: H.ms, composite: 'add' });
+}
 function blazeHop() {
   blazeBody.animate([{ transform: 'translateY(0) scale(1)' }, { transform: 'translateY(-18px) scale(1.08)', offset: 0.4 }, { transform: 'translateY(0) scale(1)' }], { duration: 450, easing: 'ease-out' });
 }
@@ -250,14 +261,34 @@ function replay(s: Solved, chip: HTMLElement) {
   }, false, false);
 }
 
+// ---------- correct-answer marks (v0.3.8) ----------
+const TICK_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 12.5l4 4 8-9"/></svg>';
+/** The white tick badge on the answer's top-right corner (lives in the slot, so it rides the board reset's collapse and
+ *  is removed with the old numbers) + one soft green ring rippling out from the tile. No sound: correct() already lands
+ *  on this frame. Reduced motion: the badge just appears, no ring. */
+function solveMarks(i: number, reduced: boolean) {
+  const F = SOLVE_FX, slot = tiles[i].parentElement!, tk = document.createElement('i');
+  tk.className = 'tick'; tk.innerHTML = TICK_SVG; slot.appendChild(tk);
+  const log = (window as any).__kkSolveFx; if (log) log.push({ i, t: performance.now(), reduced });
+  if (reduced) return;
+  tk.animate([{ transform: 'scale(0)', easing: 'ease-out' }, { transform: `scale(${F.tickPeak})`, offset: 0.55, easing: 'ease-in-out' }, { transform: 'scale(1)' }], { duration: F.tickMs });
+  const r = document.createElement('div'), d = tiles[i].offsetWidth || 80;
+  r.className = 'okring'; r.style.cssText = `left:${cur[i].x - d / 2}px;top:${cur[i].y - d / 2}px;width:${d}px;height:${d}px`;
+  fxEl.appendChild(r);
+  r.animate([{ transform: 'scale(1)', opacity: F.ringFrom }, { transform: `scale(${F.ringTo})`, opacity: 0 }], { duration: F.ringMs, easing: F.ringEase, fill: 'forwards' }).onfinish = () => r.remove();
+}
+const scorePop = () => { if (!reducedMotion()) scoreTxt.animate([{ transform: 'scale(1)' }, { transform: `scale(${SOLVE_FX.scorePeak})`, offset: 0.4 }, { transform: 'scale(1)' }], { duration: SOLVE_FX.scoreMs, easing: 'ease-out' }); };
+
 // ---------- connect beat (v0.3.5) ----------
-/** GD's reveal, ~1 s, timer paused: 0-0.15 s the answer pops green to 1.08 and every other tile dims to 40 %;
+/** GD's reveal, ~1 s, timer paused. v0.3.8: the answer pops green 1 -> 1.12 -> 1 in 180 ms with a white tick badge
+ *  popping onto its top-right corner and one soft green ring rippling out (SOLVE_FX); no confetti, no shower, no held
+ *  board. (v0.3.5-0.3.7: 0-0.15 s the answer popped green to 1.08 and held there.) Every other tile dims to 40 %;
  *  0.1-0.5 s the parts light up (#9cc0ff smaller, #3a7bff larger) and a thick round-ended line in each part's colour
  *  draws into the answer, both arriving together (sfx.link() at 0.1 s); 0.5-0.7 s one soft pulse on the answer as the
  *  lines join + the sum strip fills in; hold, then lines + dimming fade over 0.15 s (0.85-1.0 s) and hand over.
  *  Reduced motion: same clock, the lines simply appear, no scale. Everything is built in the next frame (never on the
  *  input path). v0.3.6: it always plays in full; taps on the board do nothing until the next board is ready. */
-function connectBeat(s: Solved, iC: number, big: boolean, then: () => void, burst = false) {
+function connectBeat(s: Solved, iC: number, then: () => void) {
   const run = st.run, C = CONNECT;
   let done = false; const anims: Animation[] = []; let svg: SVGSVGElement | null = null; let raf = 0;
   const others = () => tiles.filter((_, k) => k < s.nums.length && k !== iC && k !== iS && k !== iL);
@@ -277,9 +308,11 @@ function connectBeat(s: Solved, iC: number, big: boolean, then: () => void, burs
     const reduced = reducedMotion(), ans = tiles[iC];
     for (const t of others()) { t.classList.add('cdim'); t.parentElement?.classList.add('cunder'); } // the slot keeps an opaque disc under the 40 % tile, so a line passing beneath never shows through
     // (easing per segment: an effect-wide easing would warp the whole 1 s clock)
-    if (!reduced) anims.push(ans.animate([{ transform: 'scale(1)', easing: 'cubic-bezier(.34,1.56,.64,1)' }, { transform: 'scale(1.08)', offset: C.pop / C.end }, { transform: 'scale(1.08)', offset: C.pulseAt / C.end, easing: 'ease-out' },
-      { transform: 'scale(1.14)', offset: (C.pulseAt + C.pulse * 0.45) / C.end, easing: 'ease-in-out' }, { transform: 'scale(1.08)', offset: (C.pulseAt + C.pulse) / C.end }, { transform: 'scale(1.08)', offset: C.fadeAt / C.end, easing: 'ease-in-out' }, { transform: 'scale(1)' }],
+    const F = SOLVE_FX, o = (ms: number) => ms / C.end;
+    if (!reduced) anims.push(ans.animate([{ transform: 'scale(1)', easing: F.popEase }, { transform: `scale(${F.popPeak})`, offset: o(F.popMs * 0.45), easing: 'ease-in-out' }, { transform: 'scale(1)', offset: o(F.popMs) },
+      { transform: 'scale(1)', offset: o(C.pulseAt), easing: 'ease-out' }, { transform: `scale(${F.pulsePeak})`, offset: o(C.pulseAt + C.pulse * 0.45), easing: 'ease-in-out' }, { transform: 'scale(1)', offset: o(C.pulseAt + C.pulse) }, { transform: 'scale(1)' }],
       { duration: C.end }));
+    solveMarks(iC, reduced);
     // the lines: from each part tile's edge into the answer's edge, in the part's colour
     // v0.3.6 (GD): the line layer sits UNDER every number tile (inserted before the first slot, so DOM order paints it
     // below them; the fx layer with the answer's glow stays on top) and each line runs centre to centre, so both ends are
@@ -291,8 +324,8 @@ function connectBeat(s: Solved, iC: number, big: boolean, then: () => void, burs
       const P = cur[k], rP = tiles[k].offsetWidth / 2, d = Math.hypot(A.x - P.x, A.y - P.y) || 1, ux = (A.x - P.x) / d, uy = (A.y - P.y) / d;
       const x1 = P.x, y1 = P.y, x2 = A.x, y2 = A.y, len = Math.max(1, d);
       // the visible stretch keeps GD's draw clock: the tip leaves the source circle at lineAt and reaches the answer's
-      // (1.08) circle at lineAt + line; the 5 px round cap stays tucked under both circles (tip 6 px inside each edge)
-      const s0 = Math.max(0, rP - 6), e0 = Math.max(s0 + 1, len - (rA * 1.08 - 6));
+      // circle at lineAt + line (v0.3.8: no 1.08 hold any more); the 5 px round cap stays tucked under both circles (tip 6 px inside each edge)
+      const s0 = Math.max(0, rP - 6), e0 = Math.max(s0 + 1, len - (rA - 6));
       const l = document.createElementNS('http://www.w3.org/2000/svg', 'line');
       l.setAttribute('x1', x1.toFixed(1)); l.setAttribute('y1', y1.toFixed(1)); l.setAttribute('x2', x2.toFixed(1)); l.setAttribute('y2', y2.toFixed(1));
       l.setAttribute('class', part ? 'cl' : 'cs'); l.style.strokeDasharray = String(len); svg!.appendChild(l);
@@ -306,11 +339,9 @@ function connectBeat(s: Solved, iC: number, big: boolean, then: () => void, burs
       later(() => { if (!done) tiles[k].classList.add('add', part ? 'cl' : 'cs'); }, C.lineAt);
     });
     sfx.link({ delay: C.lineAt / 1000 }); // once, as the lines start (no partPop in the reveal)
-    later(() => { if (done) return; showSum(s); if (big) shower(flushStreak); else if (burst) confetti(fxEl, cur[iC].x, cur[iC].y); }, C.pulseAt); // v0.3.7: no lesson after it (Show counting OFF): one confetti burst on the answer as the lines join
+    later(() => { if (!done) showSum(s); }, C.pulseAt); // v0.3.8: no confetti burst / shower as the lines join
     later(() => { if (!done) for (const t of tiles) t.classList.remove('cdim'); }, C.fadeAt);
-    // v0.3.5.1: a shower with no lesson after it holds the solved board (lines faded, sum still up) until the shower has
-    // passed its peak, so it never lands on a playable new board
-    later(() => finish(then), big ? C.pulseAt + SHOWER.ms + SHOWER_PEAK : C.end);
+    later(() => finish(then), C.end); // v0.3.8: never held (the v0.3.5.1 held-board shower is gone)
   });
 }
 
@@ -368,24 +399,130 @@ function startRound() {
   if (!loop) loop = requestAnimationFrame(tick);
   sfx.roundStart();
 }
-function nextPuzzle() {
-  st.badTiles.clear();
-  showSum(null);
+function pickPuzzle(): Puzzle {
   // window.__kkNext: optional queue of puzzles for automated tests (deterministic stage shots); normal play never sets it
   const q = (window as any).__kkNext as Puzzle[] | undefined;
   const p = q?.length ? q.shift()! : generate(st.n, Math.random, st.seen, st.lv, st.lastKey); // no sum repeats within a round (reset in startRound); small pools cycle
   st.seen.add(sumKey(p.a, p.b)); st.lastKey = sumKey(p.a, p.b);
-  showPuzzle(p, true);
+  return p;
+}
+/** the board is playable: taps count, the round timer runs again and the solve clock starts */
+function boardReady() {
   const now = performance.now();
   st.shownAt = now; st.phase = 'play'; resume(now);
   idleArm();
+}
+/** a round's first board (its usual pop-in) */
+function nextPuzzle() {
+  st.badTiles.clear();
+  showSum(null);
+  showPuzzle(pickPuzzle(), true);
+  boardReady();
+}
+/** v0.3.8: every later board arrives through the board reset (collapse -> beat -> emerge, ~700 ms); taps unlock when the
+ *  last tile lands */
+function resetToNext() {
+  st.badTiles.clear();
+  boardReset(pickPuzzle(), boardReady);
+}
+
+// ---------- board reset (v0.3.8) ----------
+/** GD's reset between boards, ~700 ms, timer paused, phase stays 'feedback' (every tap ignored, no tap-to-skip):
+ *  1. collapse (RESET.collapseMs, ease-in): tiles (staggered clockwise) and the outline slide into the board centre,
+ *     shrinking to 0.2x as they fade; sfx.collapse() on its first frame (reduced motion: no collapse(), emerge({ gainDb: -3 }) at the swap).
+ *  2. beat (RESET.beatMs): the numbers swap while nothing shows; a small blue dot pulses once at the centre.
+ *  3. emerge (RESET.emergeMs): the new tiles fly out from the centre to their spots, ease-out-back (scale peaks ~1.15),
+ *     staggered clockwise; each number fades in once its tile is 60 % of the way out; the outline draws in behind them;
+ *     sfx.emerge() on its first frame. Ready (`then`) when the last tile lands.
+ *  Reduced motion: a plain RESET.reducedMs crossfade. Transform + opacity only.
+ *  window.__kkReset.log records [stage, t] for the e2e. */
+let resetCtl: { cancel(): void } | null = null;
+const resetLog: [string, number][] = []; (window as any).__kkReset = { log: resetLog };
+function boardReset(p: Puzzle, then: () => void) {
+  const run = st.run, n = p.nums.length, R = RESET, anims: Animation[] = [], outline = $('outline');
+  let dead = false; const dot = document.createElement('div');
+  const mark = (g: string) => { st.resetStage = g; resetLog.push([g, performance.now()]); };
+  const stopAll = () => { for (const a of anims.splice(0)) a.cancel(); };
+  const end = () => { stopAll(); dot.remove(); resetCtl = null; st.resetStage = ''; };
+  const swap = () => { for (const t of tiles) for (const a of t.getAnimations()) a.cancel(); showPuzzle(p, false); showSum(null); };
+  const ready = () => { if (dead) return; mark('ready'); end(); if (st.run === run) then(); };
+  const after = (as: Animation[], f: () => void) => { Promise.all(as.map(a => a.finished)).then(() => { if (!dead) f(); }, () => {}); };
+  resetCtl = { cancel: () => { if (dead) return; dead = true; end(); } };
+  const slots = tiles.slice(0, n).map(t => t.parentElement!);
+  // every animation is pinned to one clock (T0 = this frame), so the phases add up to exactly RESET's numbers however
+  // late a promise resolves or a frame lands (under 4x CPU too); a late phase just starts a few ms in
+  const T0 = (document.timeline.currentTime as number | null) ?? performance.now();
+  const pin = (a: Animation, at: number) => { a.startTime = T0 + at; return a; };
+  mark('collapse');
+  if (reducedMotion()) { // the crossfade: no collapse() sound, only a softer emerge() as the new board fades in (AUDIO.md v04)
+    const half = R.reducedMs / 2, els: Element[] = [...slots, outline];
+    const out = els.map(e => pin(e.animate([{ opacity: 1 }, { opacity: 0 }], { duration: half, fill: 'forwards' }), 0)); anims.push(...out);
+    after(out, () => {
+      swap(); mark('emerge'); sfx.emerge({ gainDb: -3 });
+      const inn = els.map(e => pin(e.animate([{ opacity: 0 }, { opacity: 1 }], { duration: half, fill: 'backwards' }), half));
+      stopAll(); anims.push(...inn); after(inn, ready);
+    });
+    return;
+  }
+  sfx.collapse(); // first frame of the collapse (sound pack v04)
+  const w = board.clientWidth, h = board.clientHeight, cx = w / 2, cy = h / 2;
+  const tr = (x: number, y: number, k: number) => `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px) scale(${k.toFixed(3)})`;
+  // 1. collapse: the whole phase is collapseMs including the stagger
+  const cD = Math.max(60, R.collapseMs - R.collapseStagger * (n - 1));
+  slots.forEach((sl, k) => {
+    const P = cur[k];
+    anims.push(pin(sl.animate([{ transform: tr(P.x, P.y, 1), opacity: 1 }, { transform: tr(cx, cy, R.collapseScale), opacity: 0 }],
+      { duration: cD, delay: k * R.collapseStagger, easing: R.collapseEase, fill: 'both' }), 0));
+  });
+  outline.style.transformOrigin = '50% 50%';
+  anims.push(pin(outline.animate([{ transform: 'scale(1)', opacity: 1 }, { transform: `scale(${R.collapseScale})`, opacity: 0 }], { duration: R.collapseMs, easing: R.collapseEase, fill: 'forwards' }), 0));
+  // the beat's blue dot: grows in as the tiles arrive, peaks on the beat, gone as the emerge gets going
+  const dT = R.dotLead + R.beatMs + R.dotTail, pk = (R.dotLead + R.beatMs / 2) / dT;
+  dot.className = 'rdot'; dot.style.cssText = `left:${cx - R.dotPx / 2}px;top:${cy - R.dotPx / 2}px;width:${R.dotPx}px;height:${R.dotPx}px`; fxEl.appendChild(dot);
+  pin(dot.animate([{ transform: 'scale(0)', opacity: 0 }, { transform: `scale(${R.dotPeak})`, opacity: 1, offset: pk, easing: 'ease-in' }, { transform: 'scale(0)', opacity: 0 }],
+    { duration: dT, delay: R.collapseMs - R.dotLead, easing: 'ease-out', fill: 'both' }), 0);
+  after(anims.slice(), () => {
+    // 2. beat: swap the numbers while the board is empty (the collapse's end state holds everything hidden)
+    mark('beat'); swap();
+    for (const t of tiles.slice(0, n)) (t.firstElementChild as HTMLElement | null)?.style.setProperty('opacity', '0');
+    const beat = pin(board.animate([], { duration: R.beatMs }), R.collapseMs); // a frame-synced timer to the end of the beat
+    beat.finished.then(() => { if (dead) return; emerge(); }, () => {});
+    anims.push(beat);
+  });
+  const sT = backFor(R.travelOvershoot), sK = backFor(1 + (R.emergeOvershoot - 1) / (1 - R.emergeScale));
+  const numAt = timeAt(t => outBack(t, sT), R.numberAt);
+  function emerge() {
+    mark('emerge'); sfx.emerge();
+    stopAll(); // the collapse's held (hidden) end state hands over to the emerge's identical start state in the same frame
+    const E0 = R.collapseMs + R.beatMs, ins: Animation[] = [], eD = Math.max(80, R.emergeMs - R.emergeStagger * (n - 1));
+    slots.forEach((sl, k) => {
+      const P = cur[k], kf: Keyframe[] = [];
+      for (let j = 0; j <= R.samples; j++) {
+        const t = j / R.samples, u = outBack(t, sT), sc = R.emergeScale + (1 - R.emergeScale) * outBack(t, sK);
+        kf.push({ transform: tr(cx + (P.x - cx) * u, cy + (P.y - cy) * u, sc), opacity: Math.min(1, t / 0.25), offset: t });
+      }
+      const delay = k * R.emergeStagger;
+      ins.push(pin(sl.animate(kf, { duration: eD, delay, easing: 'linear', fill: 'backwards' }), E0));
+      const num = tiles[k].firstElementChild as HTMLElement | null;
+      if (num) { num.style.removeProperty('opacity'); anims.push(pin(num.animate([{ opacity: 0 }, { opacity: 1 }], { duration: R.numberFadeMs, delay: delay + numAt * eD, easing: 'ease-out', fill: 'backwards' }), E0)); }
+    });
+    // the outline draws in behind the tiles: its corners are the tile centres, so scaling it out from the board centre on
+    // the tiles' own travel curve (a little behind them, R.lineLag) keeps every edge running tile to tile while it fades
+    // in. Transform + opacity only (no stroke-dashoffset paint).
+    const okf: Keyframe[] = [];
+    for (let j = 0; j <= R.samples; j++) { const t = j / R.samples; okf.push({ transform: `scale(${Math.max(0.001, outBack(t, sT)).toFixed(4)})`, opacity: Math.min(1, t / 0.5), offset: t }); }
+    outline.style.transformOrigin = '50% 50%';
+    anims.push(pin(outline.animate(okf, { duration: eD, delay: R.lineLag, easing: 'linear', fill: 'both' }), E0));
+    anims.push(...ins);
+    after(ins, ready);
+  }
 }
 board.addEventListener('pointerdown', e => {
   const t = (e.target as HTMLElement).closest('.tile') as HTMLElement | null;
   if (!t) return; e.preventDefault();
   const i = +t.dataset.i!, was = st.phase;
   onTap(i, e.timeStamp);
-  if (was === 'play' && i < shownN) { ripple(fxEl, cur[i].x, cur[i].y); haptic(10); sfx.tap(); } // after the state change: never delays input
+  if (was === 'play' && i < shownN) { if (st.phase !== 'feedback') ripple(fxEl, cur[i].x, cur[i].y); haptic(10); sfx.tap(); } // after the state change: never delays input (v0.3.8: a correct tap gets the green ring instead of the blue ripple)
   if (was === 'play') requestAnimationFrame(() => { if (!FORCE && bz.current() === 'think') bz.clear(); if (st.phase === 'play') idleArm(); }); // a tap cancels think
 });
 function onTap(i: number, now: number) {
@@ -407,20 +544,27 @@ function onTap(i: number, now: number) {
     bzs.solves++;
     const cheerNow = !FORCE && !hadMistake && MILESTONES.includes(st.streak), sk = st.streak;
     const newBest = st.prevBest > 0 && st.score === st.prevBest + 1, big = newBest || [3, 5, 10].includes(st.streak);
-    // AE: a milestone that gets the star shower moves its cheer (pose + blaze('cheer')) onto the shower's first burst, with streak(n)
-    const cheerLater = cheerNow && big && !reducedMotion(); if (cheerLater) pendingCheer = SPARKS[sk];
-    scoreTxt.textContent = String(st.score); setStreak(st.streak, prev, !cheerNow, !(big && !reducedMotion()));
+    const full = wantsFull();
+    // AE: with the lesson (Show counting ON) a big moment still moves its cheer (pose + blaze('cheer')) and streak(n) onto
+    // the bond's cheer frame, where the shower used to start (v0.3.8: the shower itself is gone); without the lesson both
+    // fire now, at the tap, and the board is never held
+    const atBond = big && full && !reducedMotion();
+    const cheerLater = cheerNow && atBond; if (cheerLater) pendingCheer = SPARKS[sk];
+    scoreTxt.textContent = String(st.score); scorePop(); setStreak(st.streak, prev, !cheerNow, !atBond);
     sfx.correct();
     if (!FORCE) requestAnimationFrame(() => {
-      if (hadMistake) bz.react('thumbs');
-      else if (cheerNow) { if (!cheerLater && !bz.react('cheer', { sparks: SPARKS[sk] })) blazeHop(); } // no shower (reduced motion): now; with one it waits for the shower, and the solve gets no other reaction
-      else if (WHOA_ON && !bzs.whoaUsed && solved.ms < ((window as any).__kkSpeedyMs ?? SPEEDY_MS) && special('whoa')) bzs.whoaUsed = true;
+      // v0.3.8: Blaze hops on every solve; a pose only on special moments (comeback thumbs, 3/5/10 cheer, a fast whoa),
+      // otherwise the hop carries the ordinary-solve sound through sfx.hop()
+      let reacted = false;
+      if (hadMistake) reacted = bz.react('thumbs');
+      else if (cheerNow) reacted = cheerLater || bz.react('cheer', { sparks: SPARKS[sk] });
+      else if (WHOA_ON && !bzs.whoaUsed && solved.ms < ((window as any).__kkSpeedyMs ?? SPEEDY_MS) && special('whoa')) reacted = bzs.whoaUsed = true;
+      solveHop();
+      if (!reacted) sfx.hop();
     });
     if (newBest) cueNewBest();
-    const full = wantsFull();
-    // the connect beat (~1 s), then the counting lesson or the next puzzle, always in full (no tap-to-skip since v0.3.6)
-    // big moments: with a lesson, the star shower plays inside it (at the bond); without one, during a longer beat
-    connectBeat(solved, i, big && !full, () => full ? runTeach(solved, i, nextPuzzle, big) : nextPuzzle(), !full);
+    // the connect beat (~1 s), then the counting lesson (ON) and the board reset, always in full (no tap-to-skip)
+    connectBeat(solved, i, () => full ? runTeach(solved, i, resetToNext, atBond) : resetToNext());
   } else {
     if (st.badTiles.has(i)) return; // no double penalty for re-tapping the same wrong tile
     st.badTiles.add(i); st.miss++;
@@ -562,7 +706,7 @@ function renderPicker() {
     : top ? `Best on ${LEVEL_NAME[st.lv]} ${SHAPE[st.n]}: <b>${top.score}</b> by <b>${esc(top.name)}</b>` : `${SHAPE[st.n]} · ${st.n} numbers up to ${CAP[st.lv]}`;
 }
 /** Menu preview (v0.3): the shape only, outline + plain corner dots, no numbers (it is a shape picker, not a board). */
-function showShape() { st.puzzle = null; for (const t of tiles) { t.className = 'tile'; t.textContent = ''; } }
+function showShape() { st.puzzle = null; clearTicks(); for (const t of tiles) { t.className = 'tile'; t.textContent = ''; } }
 /** Build the level's board table in idle time so the first board of a round never waits for it (Medium 7: ~30 ms on desktop). */
 const warm = () => { const f = (window as any).requestIdleCallback ?? ((cb: () => void) => setTimeout(cb, 50)); f(() => { try { generate(st.n, Math.random, undefined, st.lv); } catch { /* unsupported combo */ } }); };
 let noteTimer = 0;

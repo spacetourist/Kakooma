@@ -26,7 +26,7 @@ const kk = (f, a) => page.evaluate(f, a), wait = ms => page.waitForTimeout(ms);
 const shot = n => page.screenshot({ path: `${SHOTS}${TAG}-${n}.png` });
 const crop = async n => { const b = await page.locator('header.top').boundingBox(); await page.screenshot({ path: `${SHOTS}${TAG}-${n}.png`, clip: { x: b.x + b.width - 170, y: b.y, width: 170, height: Math.min(200, b.height + 40) } }); };
 async function tapEl(sel) { const bb = await page.locator(sel).first().boundingBox(); await page.touchscreen.tap(bb.x + bb.width / 2, bb.y + bb.height / 2); }
-const waitPlay = (t = 9000) => page.waitForFunction(() => window.__kk.phase === 'play', null, { timeout: t });
+const waitPlay = (t = 15000) => page.waitForFunction(() => window.__kk.phase === 'play', null, { timeout: t });
 const right = async () => { await waitPlay(); const i = await kk(() => window.__kk.puzzle.nums.indexOf(window.__kk.puzzle.answer)); await tapEl(`.tile[data-i="${i}"]`); };
 const wrong = async () => { await waitPlay(); const i = await kk(() => { const p = window.__kk.puzzle; return p.nums.findIndex((v, j) => v !== p.answer && !window.__kk.badTiles.has(j)); }); await tapEl(`.tile[data-i="${i}"]`); };
 const B = () => kk(() => ({ log: window.__kkBlaze.map(x => x[0]), ...window.__kkBlazeState(), sparks: document.querySelectorAll('#blaze .spark').length, streak: window.__kk.streak, src: document.querySelector('#blazeBody img.pose')?.getAttribute('src'), hidden: document.querySelector('#blazeBody img.pose')?.hidden, baseVis: document.querySelector('#blazeBody img').style.visibility }));

@@ -29,7 +29,7 @@ for (const k of ['link', 'blaze_cheer', 'blaze_thumbs', 'blaze_oops', 'blaze_cla
 const name = off => { let best = null, d = 1e9; for (const [k, v] of Object.entries(SP)) { const dd = Math.abs(off * SR - v.start); if (dd < d) { d = dd; best = k; } } return d < 0.01 * SR ? best : '?'; };
 const kk = (f, a) => page.evaluate(f, a), wait = ms => page.waitForTimeout(ms);
 const tapEl = async sel => { const bb = await page.locator(sel).first().boundingBox(); await page.touchscreen.tap(bb.x + bb.width / 2, bb.y + bb.height / 2); };
-const waitPlay = () => page.waitForFunction(() => window.__kk.phase === 'play', null, { timeout: 9000 });
+const waitPlay = () => page.waitForFunction(() => window.__kk.phase === 'play', null, { timeout: 15000 });
 const right = async () => { await waitPlay(); const i = await kk(() => window.__kk.puzzle.nums.indexOf(window.__kk.puzzle.answer)); await tapEl(`.tile[data-i="${i}"]`); return kk(() => performance.now()); };
 const wrong = async () => { await waitPlay(); const i = await kk(() => { const p = window.__kk.puzzle; return p.nums.findIndex((v, j) => v !== p.answer && !window.__kk.badTiles.has(j)); }); await tapEl(`.tile[data-i="${i}"]`); };
 // the line-draw moment of the current connect beat: each line's animation start + lineAt (its keyframes are opacity 0 until then)

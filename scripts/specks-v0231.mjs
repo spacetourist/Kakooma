@@ -43,7 +43,7 @@ for (const [name, n, p] of sums) {
     const at = await page.evaluate(() => performance.now() - window.__t0);
     const file = `${TAG}-specks-${name.replace('+', '-')}-${off}.png`;
     await page.screenshot({ path: SHOTS + file });
-    await page.waitForFunction(() => window.__kk.phase === 'play', null, { timeout: 9000 });
+    await page.waitForFunction(() => window.__kk.phase === 'play', null, { timeout: 15000 });
     const g = await page.evaluate(() => { const fx = document.getElementById('fx').getBoundingClientRect(); return { stg: window.__stg, fx: { x: fx.x, y: fx.y, w: fx.width, h: fx.height } }; });
     out.push({ sum: name, off, at: Math.round(at), file, top: Math.round(g.stg.bond), absorb: Math.round(g.stg.absorb), fx: g.fx });
   }

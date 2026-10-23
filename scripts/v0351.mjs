@@ -34,13 +34,11 @@ await open(BASE, '?round=600&level=medium&teach=full');
 await page.waitForFunction(() => performance.getEntriesByType('resource').some(e => /confetti/.test(e.name)));
 await kk(() => { window.__kkNext = [{ nums: [7, 9, 12, 19, 4], a: 7, b: 12, answer: 19 }]; });
 await tapEl('#mStart'); await waitPlay(); await wait(300); await tapAnswer();
-await page.waitForFunction(() => window.__kkConfetti.length > 0, null, { timeout: 15000, polling: 5 });
-await kk(() => { window.__burstT = window.__kkConfetti[0][1]; });
-const at = [];
-for (const t of [100, 400, 1000]) { at.push(await untilMs('__burstT', t)); await page.screenshot({ path: `${SHOTS}v0351-confetti-${String(t).padStart(4, '0')}.png` }); }
+// v0.3.8: no per-solve confetti; the lesson's cheer frame (where the bond burst used to fire) stays clean
+await page.waitForFunction(() => window.__kk.teachStage === 'cheer', null, { timeout: 15000, polling: 5 });
+await wait(400); await page.screenshot({ path: `${SHOTS}v0351-confetti-0400.png` });
 let c = await CL();
-check(c.length === 2 && c.every(e => e[0] === 'burst' && e[2] === 40) && Math.abs(c[0][1] - c[1][1]) < 5, `normal solve: two bursts at once, 40 each, as the bond completes ${JSON.stringify(c)} (frames at ${at.join('/')} ms)`);
-check(await kk(() => window.__kk.teachStage === 'cheer'), 'burst fires at the bond (cheer)');
+check(c.length === 0, `normal solve (lesson): no confetti at the bond (v0.3.8) ${JSON.stringify(c)}`);
 await waitPlay();
 // 300 ms rule + 150 cap
 await wait(2600);
@@ -52,13 +50,12 @@ await open(BASE, '?round=600&level=easy&teach=full');
 await page.waitForFunction(() => performance.getEntriesByType('resource').some(e => /confetti/.test(e.name)));
 await tapEl('#mStart'); await waitPlay(); await wait(300);
 for (let k = 0; k < 2; k++) { await tapAnswer(); await wait(1200); await tapEl('#play'); await waitPlay(); await wait(200); }
-await kk(() => { window.__kkConfetti.length = 0; });
-await tapAnswer(); await page.waitForFunction(() => window.__kkConfetti.length > 0, null, { timeout: 15000, polling: 5 });
-const st3 = await kk(() => ({ stage: window.__kk.teachStage, streak: window.__kk.streak, phase: window.__kk.phase }));
+await kk(() => { window.__kkConfetti.length = 0; window.__l0 = window.__sfxLog?.length ?? 0; });
+await tapAnswer(); await page.waitForFunction(() => window.__kk.teachStage === 'cheer', null, { timeout: 15000, polling: 5 });
+const st3 = await kk(() => ({ stage: window.__kk.teachStage, streak: window.__kk.streak, phase: window.__kk.phase, pose: document.getElementById('blazeBody').dataset.pose }));
 await wait(700); await page.screenshot({ path: `${SHOTS}v0351-shower.png` });
 await wait(600); c = await CL();
-const xs = await kk(() => 0); // positions are in the worker; spacing is checked by the source (even grid + jitter)
-check(st3.stage === 'cheer' && st3.streak === 3 && c.length === 6 && c.every(e => e[0] === 'shower' && e[2] === 25) && c.every((e, i) => !i || Math.abs(e[1] - c[i - 1][1] - 200) < 40), `streak 3 with a lesson: the shower (6 x 25, 200 ms apart) plays inside the lesson at the bond, no burst: ${JSON.stringify(c.map(e => e[0] + ':' + e[2] + '@' + (e[1] - c[0][1])))}`);
+check(st3.stage === 'cheer' && st3.streak === 3 && st3.pose === 'cheer' && c.length === 0, `streak 3 with a lesson: Blaze cheers at the bond, no shower (v0.3.8): ${JSON.stringify(st3)} ${JSON.stringify(c)}`);
 await waitPlay();
 // ---------- big moment with NO lesson (quick): the solved board holds until the shower has passed its peak ----------
 async function quickShower(base, shot) {
@@ -73,7 +70,7 @@ async function quickShower(base, shot) {
 }
 const qa = await quickShower(BASE, `${SHOTS}v0351-fix2-after-quick-shower-1600.png`);
 const lastShower = qa.c.filter(e => e[0] === 'shower').at(-1)?.[1] - (await kk(() => 0));
-check(qa.c.filter(e => /^shower/.test(e[0])).length === 6 && qa.nb >= 1950 && qa.nb < 2300, `streak 3, no lesson: shower during the beat, next board only at ${qa.nb} ms (last burst at ~1.5 s + 0.3 s; v0.3.7: the previous solve's burst may still be falling, so the first wave can be capped: ${qa.c.map(e => e[0]).join(',')})`);
+check(qa.c.length === 0 && qa.nb >= 1650 && qa.nb < 1950, `streak 3, no lesson: no shower, no held board (v0.3.8): next board after the beat + reset at ${qa.nb} ms (${qa.c.map(e => e[0]).join(',')})`);
 // ---------- fix 1: filled sum held to the handover (0.95 s) ----------
 async function sumAt(base, shot) {
   await open(base, '?round=600&level=easy&teach=quick');

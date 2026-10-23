@@ -212,6 +212,14 @@ button { font: inherit; color: inherit; border: 0; background: none; padding: 0;
 .fx > *, .labfx > * { position: absolute; left: 0; top: 0; }
 .plate { border-radius: 24px; background: rgba(246, 247, 251, .985); }
 .ring { border-radius: 50%; border: 3px solid var(--blue); will-change: transform, opacity; }
+/* v0.3.8 correct answer: a white tick badge on the answer's top-right corner (rides the slot, so it collapses with the
+   tile), one soft green ring rippling out, and the board reset's blue centre dot */
+.tick { position: absolute; right: -2px; top: -2px; width: 28px; height: 28px; border-radius: 50%; background: #fff; box-shadow: 0 1px 4px rgba(20, 30, 60, .22);
+  display: grid; place-items: center; pointer-events: none; z-index: 1; transform-origin: 50% 50%; }
+.tick svg { width: 18px; height: 18px; fill: none; stroke: var(--green); stroke-width: 3.2; stroke-linecap: round; stroke-linejoin: round; }
+.okring { border-radius: 50%; border: 3px solid var(--green); will-change: transform, opacity; opacity: 0; }
+.rdot { border-radius: 50%; background: var(--blue); will-change: transform, opacity; opacity: 0; }
+.tile .n { display: block; }
 .confetti-canvas { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 60; }
 .tf { display: grid; grid-template-columns: repeat(5, var(--cs)); gap: var(--g); padding: var(--p); background: var(--card); border-radius: 10px; box-shadow: var(--shadow); transition: box-shadow .2s; }
 .tf i { width: var(--cs); height: var(--cs); border-radius: 5px; border: 1.5px solid var(--line); }

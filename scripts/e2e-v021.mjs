@@ -30,7 +30,7 @@ async function tapEl(sel) { const bb = await page.locator(sel).first().boundingB
 const tapTile = i => tapEl(`.tile[data-i="${i}"]`);
 const answerIdx = () => kk(() => window.__kk.puzzle.nums.indexOf(window.__kk.puzzle.answer));
 const wrongIdx = () => kk(() => { const p = window.__kk.puzzle, a = p.nums.indexOf(p.answer); return a === 0 ? 1 : 0; });
-const waitPlay = (t = 9000) => page.waitForFunction(() => window.__kk.phase === 'play', null, { timeout: t });
+const waitPlay = (t = 15000) => page.waitForFunction(() => window.__kk.phase === 'play', null, { timeout: t });
 const stage = (g, t = 8000) => page.waitForFunction(g => window.__kk.teachStage === g, g, { timeout: t });
 const queue = list => kk(l => { window.__kkNext = l; }, list);
 const P = (nums, a, b) => ({ nums, a, b, answer: a + b });
@@ -105,7 +105,7 @@ check((await kk(() => document.querySelector('#fx .bondcap')?.textContent)) === 
 const capCol = await kk(() => ({ p0: getComputedStyle(document.querySelector('#fx .bondcap .p0')).color, p1: getComputedStyle(document.querySelector('#fx .bondcap .p1')).color, ctr: getComputedStyle(document.documentElement).getPropertyValue('--lblue').trim() }));
 check(capCol.p0 === 'rgb(82, 135, 234)' && capCol.p1 === 'rgb(58, 123, 255)' && capCol.ctr.toLowerCase() === '#9cc0ff', 'v0.2.3.2: caption smaller-part word is #5287ea, larger-part word stays #3a7bff, counters/tiles token stays #9cc0ff ' + JSON.stringify(capCol));
 await waitPlay(); const teachTotal = Date.now() - tapAt; perf.fullSolveMs = teachTotal;
-check(teachTotal > 6000 && teachTotal < 8500, `full lesson (v0.3.3 count + in-count make-ten, Hard pace) is ~6.5-8 s (${teachTotal} ms incl. test round-trips)`);
+check(teachTotal > 6700 && teachTotal < 9200, `full lesson (v0.3.3 count + in-count make-ten, Hard pace, + v0.3.8 0.7 s board reset) is ~7.2-8.7 s (${teachTotal} ms incl. test round-trips)`);
 clearInterval(sampler); await wait(150);
 const during = samples.filter(s => s.phase === 'feedback');
 check(during.length > 15 && during.every(s => !s.running && s.left === during[0].left) && Math.abs(during[0].left - before.rem) < 600, `timer paused for the whole teaching solve (${during.length} samples over ${teachTotal} ms, stayed at ${Math.round(during[0]?.left)} ms)`);
@@ -141,7 +141,7 @@ await wait(200); await tapTile(await answerIdx()); await wait(620); // v0.3.5: t
 const q = await kk(() => ({ tc: window.__kk.teachCount, phase: window.__kk.phase, sum: document.getElementById('sum').textContent, fx: document.querySelectorAll('#fx .ctr').length }));
 check(q.tc === tc && q.phase === 'feedback' && /^\d+\+\d+=\d+$/.test(q.sum) && q.fx === 0, 'solve 4 with Show counting OFF: connect beat + sum strip (no teaching)');
 await shot('12-quick-solve');
-const qs = Date.now(); await waitPlay(); check(Date.now() - qs < 700, 'quick feedback (connect beat) ends at ~1 s');
+const qs = Date.now(); await waitPlay(); check(Date.now() - qs < 1400, 'quick feedback (connect beat + v0.3.8 0.7 s board reset) ends at ~1.7 s');
 
 // ---------- wrong tap caption, then correct => full ----------
 await wait(200);
@@ -336,7 +336,7 @@ async function lessonRun(onTap) {
   const got = Object.fromEntries(Object.keys(spec).map(n => [n, rel(n)]));
   check(Object.entries(spec).every(([n, t]) => got[n] != null && Math.abs(got[n] - t) <= 40), 'bond hooks on the GD spec (ms after the answer reaches the top) ' + JSON.stringify(got));
   const clr = r1.stg.clear - top, end = r1.stg['next board'] - top;
-  check(Math.abs(clr - 3300) <= 50 && Math.abs(end - 3600) <= 70, `hold to ${clr} ms (3.3 s), clear to ${end} ms (3.6 s)`);
+  check(Math.abs(clr - 3300) <= 50 && Math.abs(end - 4300) <= 70, `hold to ${clr} ms (3.3 s), clear + v0.3.8 board reset to ${end} ms (4.3 s)`);
   check(!r1.sfx.some(([n]) => n === 'stopAll'), 'stopAll not called when the lesson plays to the end');
   const ans1 = { bond: sx.bond, top };
   check(Math.abs(sx.bond - (r1.stg.absorb + 220)) <= 40, 'bond() fires as the answer starts to rise ' + JSON.stringify(ans1));

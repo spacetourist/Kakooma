@@ -1,4 +1,4 @@
-// kkaudio.ts: Kakooma sound pack v03 (v02c + Blaze reactions: blaze(), bond-line follow-through: link()). Plain Web Audio, no dependencies. See AUDIO.md.
+// kkaudio.ts: Kakooma sound pack v04 (v03 + board reset: collapse()/emerge(), Blaze's solve hop: hop() with 3 variants). Plain Web Audio, no dependencies. See AUDIO.md.
 // RULES: audio never drives game timing; every call is synchronous, cheap and never throws.
 // If anything fails (no Web Audio, fetch/decode error, locked context) the game simply stays silent.
 
@@ -35,12 +35,15 @@ const UI_SOUNDS = new Set(['uiTap', 'slide']);
 /** one voice at a time per group: a newer call fades the older one out (8 ms) */
 const GROUP_OF: Record<string, string> = {
   wrong: 'wrong', penalty: 'penalty', cheer: 'cheer', star: 'cheer', streak: 'cue', newBest: 'cue', timeUp: 'cue', lowTime: 'cue', roundStart: 'cue',
-  replay: 'replay', bond: 'bond', clear: 'bond', quizStart: 'cue2',
+  replay: 'replay', bond: 'bond', quizStart: 'cue2',
+  // v04: the board reset's two sounds share one voice (a re-triggered reset, or emerge() right after collapse() in the
+  // reduced-motion crossfade, fades the older one out); one hop at a time
+  collapse: 'reset', emerge: 'reset', hop: 'hop',
   // v03: one Blaze voice at a time (a new pose's sound fades the previous one out)
   blaze_cheer: 'blaze', blaze_thumbs: 'blaze', blaze_oops: 'blaze', blaze_clap: 'blaze', blaze_think: 'blaze', blaze_whoa: 'blaze',
 };
 /** minimum spacing per family (s); calls inside the window are dropped (rapid-fire hooks) */
-const MIN_GAP: Record<string, number> = { slide: 0.035, count: 0.024, tick: 0.2, uiTap: 0.03, tap: 0.025 };
+const MIN_GAP: Record<string, number> = { slide: 0.035, count: 0.024, tick: 0.2, uiTap: 0.03, tap: 0.025, hop: 0.1 };
 /** polyphony cap per family (oldest is faded out) */
 const MAX_POLY: Record<string, number> = { count: 4, slide: 3, tap: 3 };
 const MAX_VOICES = 24;
@@ -60,6 +63,10 @@ export const COUNT_PACE = {
   thin: 'ghost' as 'shorten' | 'ghost' | 'skip' | 'none', ghostDb: -8,
   tenAccent: true, tenAccentFast: true,
 };
+/** v04: Blaze's solve hop (BLAZE_HOP: up 8 px and down over 240 ms, lands at 0.78 = 187 ms with a squash). hop() is called on
+ *  the hop's first frame; the sprite is ONLY the landing bloop, played `offset` (0.19 s) later so it lands with the squash,
+ *  ~205 ms after correct(). Editable at runtime (e.g. if the designer changes BLAZE_HOP.ms / landAt: offset ~ ms * landAt). */
+export const HOP = { offset: 0.19, variants: 3 };
 const db2 = (d: number) => Math.pow(10, d / 20);
 
 /** v0.2.3 bond timing (seconds after the answer reaches the top). Configurable; used by scheduleBond(). */
@@ -210,6 +217,14 @@ function playX(name: string, o: PlayOpts = {}, len?: number, fade = 0.012): Audi
 
 const clampI = (x: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, Math.round(+x || 0)));
 const p = (name: string, o?: PlayOpts) => { play(name, o); };
+let hopLast = -1;
+/** v04: which hop variant to play: an explicit index (i % 3), else a random one that is never the previous one */
+function hopIndex(i?: number): number {
+  const n = Math.max(1, HOP.variants | 0);
+  if (typeof i === 'number' && isFinite(i)) return ((Math.floor(i) % n) + n) % n;
+  if (n === 1) return 0;
+  const k = Math.floor(Math.random() * (n - 1)); return hopLast < 0 ? Math.floor(Math.random() * n) : (hopLast + 1 + k) % n;
+}
 
 /** The game hooks (drop-in for src/sfx.ts). Optional last arg { when, gainDb } for scheduling/tests. */
 export const sfx = {
@@ -252,16 +267,31 @@ export const sfx = {
       if (ten && P.tenAccent && (!fast || P.tenAccentFast)) playX('countTen', { when: t, gainDb: o?.gainDb }, fast ? Math.max(0.09, len ?? 0) : undefined, 0.02);
     } catch { /* never throws */ }
   },
-  hop(o?: PlayOpts): void { p('hop', o); },
-  makeTen(o?: PlayOpts): void { p('makeTen', o); },
+  /** v04: Blaze's ordinary-solve hop, called on the hop's first frame (alongside correct()). hop() / hop({delay}) picks one of 3
+   *  soft landing bloops (C5 / A4 / G4), never the same one twice in a row; hop(i) forces variant i % 3. The landing plays
+   *  HOP.offset (0.19 s) after the call / delay / when. (v02's take-off 'hop' sprite is retired: it put its energy at take-off.) */
+  hop(i?: number | PlayOpts, o?: PlayOpts): void {
+    try {
+      if (!S) return;
+      const oo = (typeof i === 'object' && i !== null ? i : o) || {}, k = hopIndex(typeof i === 'number' ? i : undefined);
+      const off = Math.max(0, +HOP.offset || 0);
+      const src = play('hop_' + k, oo.when !== undefined ? { when: oo.when + off, gainDb: oo.gainDb } : { delay: Math.max(0, oo.delay ?? 0) + off, gainDb: oo.gainDb });
+      if (src) hopLast = k;
+    } catch { /* never throws */ }
+  },
+  makeTen(_o?: PlayOpts): void { /* v04: retired (never called by the game; sprite dropped for the Opus budget). Silent no-op. */ },
   total(o?: PlayOpts): void { p('total', o); },                // v02c: counter tile turns green on the final count (~150 ms after partPop(1))
   link(o?: PlayOpts): void { p('link', o); },                  // v03: bond lines start lighting after a correct tap (~100-200 ms after correct())
   bond(o?: PlayOpts): void { p('bond', o); },
   partPop(i: number, o?: PlayOpts): void { p('partPop_' + clampI(i, 0, 1), o); },   // 0 = smaller part, 1 = larger
-  cheer(o?: PlayOpts): void { p('cheer', o); },                  // with the confetti, as the caption lands
+  cheer(o?: PlayOpts): void { p('cheer', o); },                  // as the counting lesson's caption lands
   caption(_o?: PlayOpts): void { /* silent by design: cheer() already marks the caption landing */ },
   pulse(i: number, o?: PlayOpts): void { p('pulse_' + clampI(i, 0, 2), o); },       // 0 part 1 (low), 1 part 2 (mid), 2 whole (high)
-  clear(o?: PlayOpts): void { p('clear', o); },                  // optional, very soft
+  clear(_o?: PlayOpts): void { /* v04: retired (never called; sprite dropped for the Opus budget). Silent no-op: use collapse(). */ },
+  // v04: board reset (v0.3.8, ~700 ms). collapse() on the collapse's first frame; emerge() on the emerge's first frame
+  // (collapseMs 280 + beatMs 60 = 340 ms later). Reduced-motion crossfade: call emerge({ gainDb: -3 }) only, no collapse().
+  collapse(o?: PlayOpts): void { p('collapse', o); },            // soft water suck-in, ends on a tiny low bloop at ~280 ms
+  emerge(o?: PlayOpts): void { p('emerge', o); },                // six rising bubble pops 30 ms apart over an airy up-whoosh
   // Bond Lab
   slide(n: number, o?: PlayOpts): void { p('slide_' + clampI(n - 1, 0, 9), o); },  // every slider step; rate-limited to 1 per 35 ms
   labPair(a: number, o?: PlayOpts): void { p('labPair_' + ((Math.max(1, Math.floor(+a || 1)) - 1) % 5), o); },
@@ -288,7 +318,7 @@ export function scheduleBond(timing: Partial<typeof BOND_TIMING> = {}, delaySec 
     T.partPop.forEach((t, i) => srcs.push(play('partPop_' + i, { when: t0 + t })));
     srcs.push(play('cheer', { when: t0 + T.cheer }));
     T.pulse.forEach((t, i) => srcs.push(play('pulse_' + i, { when: t0 + t })));
-    if (T.playClear) srcs.push(play('clear', { when: t0 + T.clear }));
+    if (T.playClear) srcs.push(play('clear', { when: t0 + T.clear }));   // v04: 'clear' is retired, so this plays nothing
   } catch { /* */ }
   return () => srcs.forEach(s => { try { s && s.stop(); } catch { /* */ } });
 }

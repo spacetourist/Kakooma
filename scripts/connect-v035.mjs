@@ -81,14 +81,14 @@ for (const lv of ['easy', 'hard']) {
   for (const t of [150, 350, 600, 900]) { await known(lv); st[t] = await at(t, `${SHOTS}${TAG}-connect-${lv}-${String(t).padStart(4, '0')}.png`); }
   const s1 = st[150], s2 = st[350], s3 = st[600], s4 = st[900];
   log.push(`     ${lv}: ` + JSON.stringify({ 600: s3 }));
-  check(s1.ans.bg === GR && Math.abs(scale(s1.ans.tf) - 1.08) < 0.02 && s1.dim.every(o => Math.abs(o - 0.4) < 0.05), `${lv} 0.15 s: answer green at ${scale(s1.ans.tf)}, others at ${s1.dim} opacity`);
+  check(s1.ans.bg === GR && scale(s1.ans.tf) > 1.0 && scale(s1.ans.tf) <= 1.121 && /* v0.3.8: 1 -> 1.12 -> 1 pop over 180 ms */ s1.dim.every(o => Math.abs(o - 0.4) < 0.05), `${lv} 0.15 s: answer green at ${scale(s1.ans.tf)}, others at ${s1.dim} opacity`);
   check(s1.lines.length === 2 && s1.lines.every(l => l.o > 0 && l.off > 0.5 * l.len) && s1.S !== 'rgb(255, 255, 255)' && s1.L !== 'rgb(255, 255, 255)' && s2.S === LB && s2.L === DB, `${lv} 0.15-0.35 s: parts light up (#9cc0ff / #3a7bff), both lines just started ${JSON.stringify(s1.lines.map(l => [l.o, Math.round(l.off)]))}`);
-  check(s2.lines.every(l => l.off > 0 && l.off < l.len) && Math.abs(vis(s2, 0) - vis(s2, 1)) < 0.02 && /ph|hint/.test(s2.sum), `${lv} 0.35 s: both lines mid-draw at the same visible fraction (${vis(s2, 0).toFixed(3)} / ${vis(s2, 1).toFixed(3)}: arrive together), sum strip not yet filled`);
+  check(s2.lines.every(l => l.off > 0 && l.off < l.len) && Math.abs(vis(s2, 0) - vis(s2, 1)) < 0.04 && /* v0.3.8: tips stop rA-6 short of the centre */ /ph|hint/.test(s2.sum), `${lv} 0.35 s: both lines mid-draw at the same visible fraction (${vis(s2, 0).toFixed(3)} / ${vis(s2, 1).toFixed(3)}: arrive together), sum strip not yet filled`);
   check(s2.lines[0].c === LB && s2.lines[1].c === DB && s2.lines.every(l => l.w === '10px' && l.cap === 'round'), `${lv}: thick round-ended lines in the part colours`);
   check([s1, s2, s3].every(s => s.under && s.hit.every(Boolean) && s.cunder), `${lv}: lines on a layer UNDER all the tiles (answer + both parts on top at their centres; dimmed slots keep an opaque disc)`);
   check([s1, s2, s3].every(s => s.ends && s.ends.err.every(e => e < 1)), `${lv}: each line runs centre to centre (max end error ${Math.max(...s1.ends.err).toFixed(2)} px)`);
   check(s1.lines.every((l, j) => l.len - l.off <= s1.ends.rP[j] + 1), `${lv} 0.15 s: the drawn tip has only just left the source circle (${s1.lines.map((l, j) => (l.len - l.off - s1.ends.rP[j]).toFixed(1))} px past its edge)`);
-  check(s3.lines.every(l => l.off > 0 && l.off <= s3.ends.rA * 1.08 && l.off >= s3.ends.rA * 1.08 - 8) && /pop/.test(s3.sum) && scale(s3.ans.tf) > 1.08, `${lv} 0.6 s: lines joined, soft pulse (${scale(s3.ans.tf)}), sum strip filled`);
+  check(s3.lines.every(l => l.off > 0 && l.off <= s3.ends.rA * 1.12 && l.off >= s3.ends.rA - 10) && /pop/.test(s3.sum) && scale(s3.ans.tf) > 1.01 /* v0.3.8: pulse to 1.06 */, `${lv} 0.6 s: lines joined, soft pulse (${scale(s3.ans.tf)}), sum strip filled`);
   check(s4.lines.every(l => l.o < 1 && l.o > 0) && s4.dim.every(o => o > 0.4), `${lv} 0.9 s: lines + dimming fading out (${s4.lines.map(l => l.o.toFixed(2))}, ${s4.dim.map(o => o.toFixed(2))})`);
   check([s1, s2, s3, s4].every(s => !s.running), `${lv}: round timer paused through the beat`);
   const sx = s4.sfx; check(sx.filter(x => x === 'link').length === 1 && !sx.includes('partPop'), `${lv}: link() once, no partPop in the reveal (${sx.join(',')})`);
@@ -99,7 +99,7 @@ for (const lv of ['easy', 'hard']) {
     check(q.under && q.hit.every(Boolean), `shot v036-lines-under-${t}: lines under the tiles (at ${q.at} ms; tips ${q.lines.map(l => Math.round(l.len - l.off)).join('/')} of ${q.lines.map(l => Math.round(l.len)).join('/')} px)`); }
   // handover at 1.0 s
   await known(lv); await tapAnswer(); const t0 = Date.now(); await page.waitForFunction(() => window.__kk.phase === 'play' && !document.querySelector('#board svg.connect'), null, { timeout: 3000 }); const ho = Date.now() - t0;
-  check(ho > 850 && ho < 1300, `${lv}: next puzzle ${ho} ms after the tap`);
+  check(ho > 1550 && ho < 2000, `${lv}: next puzzle ${ho} ms after the tap (v0.3.8: 1.0 s beat + ~0.7 s board reset)`);
   // frame sequence for GD
   if (!NOSEQ) { for (let t = 0; t <= 1000; t += 50) { await known(lv); await at(t, `${SEQ}${lv}-${String(t).padStart(4, '0')}.png`); await wait(150); } }
 }
