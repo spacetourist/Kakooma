@@ -19,9 +19,10 @@ const SHOWER_PEAK = 300; // ms after the last shower burst before the next board
 const CONNECT = { pop: 150, lineAt: 100, line: 400, pulseAt: 500, pulse: 200, fadeAt: 850, fade: 150, end: 1000 };
 const SLIDE_MS = 250;             // picker change: tiles slide to the new corners
 /** v0.3: boards are per level + number count (kk.board.v2); v1 (no level) is migrated once to Hard and left in place as a backup. */
-const LS = { board: 'kk.board.v2', boardV1: 'kk.board.v1', n: 'kk.n', lv: 'kk.lv' };
+const LS = { board: 'kk.board.v2', boardV1: 'kk.board.v1', n: 'kk.n', lv: 'kk.lv', lesson: 'kk.lesson' };
 const lvName = (lv: Level) => `${LEVEL_NAME[lv]} ${CAP[lv]}`;
-/** ?teach=quick|full forces the solve animation (testing). Default: full on the first 3 solves, milestones, new best, after a mistake, chip taps. */
+/** ?teach=quick|full forces the solve animation (testing only, overrides the menu setting). Default (v0.3.7): the "Show counting"
+ *  menu setting ('kk.lesson', ON unless saved as '0'): ON = the full counting + bond lesson after every solve, OFF = never. */
 const TEACH = Q.get('teach');
 const MAX = 7;
 
@@ -34,7 +35,7 @@ const st = {
   phase: 'menu' as Phase, n: 5, lv: 'easy' as Level, lastKey: '', puzzle: null as Puzzle | null,
   left: ROUND_MS, since: 0, running: false,
   score: 0, miss: 0, streak: 0, best: 0, solve: [] as number[], solved: [] as Solved[], shownAt: 0, pausedAt: 0,
-  prevBest: 0, teach: null as { cancel: () => void } | null, teachCount: 0, teachStage: '', seen: new Set<string>(), badTiles: new Set<number>(), timers: new Set<number>(), run: 0,
+  prevBest: 0, teach: null as { cancel: () => void } | null, teachCount: 0, lesson: localStorage.getItem('kk.lesson') !== '0', teachStage: '', seen: new Set<string>(), badTiles: new Set<number>(), timers: new Set<number>(), run: 0,
 };
 (window as any).__kk = st;
 
@@ -256,7 +257,7 @@ function replay(s: Solved, chip: HTMLElement) {
  *  lines join + the sum strip fills in; hold, then lines + dimming fade over 0.15 s (0.85-1.0 s) and hand over.
  *  Reduced motion: same clock, the lines simply appear, no scale. Everything is built in the next frame (never on the
  *  input path). v0.3.6: it always plays in full; taps on the board do nothing until the next board is ready. */
-function connectBeat(s: Solved, iC: number, big: boolean, then: () => void) {
+function connectBeat(s: Solved, iC: number, big: boolean, then: () => void, burst = false) {
   const run = st.run, C = CONNECT;
   let done = false; const anims: Animation[] = []; let svg: SVGSVGElement | null = null; let raf = 0;
   const others = () => tiles.filter((_, k) => k < s.nums.length && k !== iC && k !== iS && k !== iL);
@@ -305,7 +306,7 @@ function connectBeat(s: Solved, iC: number, big: boolean, then: () => void) {
       later(() => { if (!done) tiles[k].classList.add('add', part ? 'cl' : 'cs'); }, C.lineAt);
     });
     sfx.link({ delay: C.lineAt / 1000 }); // once, as the lines start (no partPop in the reveal)
-    later(() => { if (done) return; showSum(s); if (big) shower(flushStreak); }, C.pulseAt);
+    later(() => { if (done) return; showSum(s); if (big) shower(flushStreak); else if (burst) confetti(fxEl, cur[iC].x, cur[iC].y); }, C.pulseAt); // v0.3.7: no lesson after it (Show counting OFF): one confetti burst on the answer as the lines join
     later(() => { if (!done) for (const t of tiles) t.classList.remove('cdim'); }, C.fadeAt);
     // v0.3.5.1: a shower with no lesson after it holds the solved board (lines faded, sum still up) until the shower has
     // passed its peak, so it never lands on a playable new board
@@ -335,7 +336,10 @@ function runTeach(s: Solved, iC: number, then: () => void, big = false, live = t
     real.done.then(end);
   });
 }
-function wantsFull(extra: boolean) { if (TEACH === 'quick') return false; if (TEACH === 'full') return true; return st.score <= 3 || extra; }
+/** v0.3.7: the lesson follows the menu's "Show counting" setting on every solve. (Up to v0.3.6.2 it only ran on the first 3
+ *  solves, streak 5/10/20, a new best or after a mistake, so most clean solves silently got just the connect beat: that,
+ *  not the double tap, is why the lesson seemed to vanish when a fast player double-tapped; see README.) */
+function wantsFull() { if (TEACH === 'quick') return false; if (TEACH === 'full') return true; return st.lesson; }
 let capTimer = 0;
 /** Wrong tap (v0.2.1): the reason replaces the hint/placeholder inside the sum strip for 2 s, then the strip restores. */
 function wrongCaption(v: number) {
@@ -412,12 +416,11 @@ function onTap(i: number, now: number) {
       else if (cheerNow) { if (!cheerLater && !bz.react('cheer', { sparks: SPARKS[sk] })) blazeHop(); } // no shower (reduced motion): now; with one it waits for the shower, and the solve gets no other reaction
       else if (WHOA_ON && !bzs.whoaUsed && solved.ms < ((window as any).__kkSpeedyMs ?? SPEEDY_MS) && special('whoa')) bzs.whoaUsed = true;
     });
-    const milestone = st.streak === 5 || st.streak === 10 || st.streak === 20;
     if (newBest) cueNewBest();
-    const full = wantsFull(milestone || newBest || hadMistake);
+    const full = wantsFull();
     // the connect beat (~1 s), then the counting lesson or the next puzzle, always in full (no tap-to-skip since v0.3.6)
     // big moments: with a lesson, the star shower plays inside it (at the bond); without one, during a longer beat
-    connectBeat(solved, i, big && !full, () => full ? runTeach(solved, i, nextPuzzle, big) : nextPuzzle());
+    connectBeat(solved, i, big && !full, () => full ? runTeach(solved, i, nextPuzzle, big) : nextPuzzle(), !full);
   } else {
     if (st.badTiles.has(i)) return; // no double penalty for re-tapping the same wrong tile
     st.badTiles.add(i); st.miss++;
@@ -593,6 +596,13 @@ const muteBtn = $('mMute');
 function drawMute() { const m = isMuted(); muteBtn.classList.toggle('off', m); muteBtn.setAttribute('aria-pressed', String(m)); muteBtn.setAttribute('aria-label', m ? 'Sound off' : 'Sound on'); }
 press(muteBtn, () => { const m = !isMuted(); setMuted(m); drawMute(); if (!m) whenRunning(() => sfx.uiTap()); });
 drawMute(); initAudio();
+// v0.3.7: "Show counting" (default ON, saved as 'kk.lesson' = '1' / '0'). ON: connect beat, then the full counting + bond
+// lesson after every solve. OFF: the connect beat + confetti, then straight to the next board (the held-board shower path).
+// Leaderboards stay shared: the timer is paused through the beat and the lesson either way.
+const lessonBtn = $('mLesson');
+function drawLesson() { lessonBtn.classList.toggle('on', st.lesson); lessonBtn.setAttribute('aria-checked', String(st.lesson)); }
+press(lessonBtn, () => { st.lesson = !st.lesson; try { localStorage.setItem(LS.lesson, st.lesson ? '1' : '0'); } catch {} drawLesson(); sfx.uiTap(); });
+drawLesson();
 press($('mStart'), () => { startRound(); sfx.uiTap(); });
 press($('mBoards'), () => { fromGame = false; showBoards(st.n, st.lv); sfx.uiTap(); });
 const lab = initLab(press, () => toMenu());

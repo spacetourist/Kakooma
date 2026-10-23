@@ -1,4 +1,4 @@
-// v0.3.6 no tap-to-skip: node scripts/noskip-v036.mjs [baseUrl]. Taps during the connect beat, the counting lesson and a
+// v0.3.6 no tap-to-skip (+ v0.3.7 double-tap checks, section F): node scripts/noskip-v036.mjs [baseUrl]. Taps during the connect beat, the counting lesson and a
 // chip replay do nothing (nothing queued and replayed as a pick on the next board), the board is live again the moment
 // the next board is ready (never stays locked: after a lesson, a quick beat, a replay, a quit mid-lesson), and mute works
 // mid-lesson (no source starts after it, the lesson carries on).
@@ -86,6 +86,36 @@ await tapEl('#gQuit'); await page.waitForFunction(() => document.getElementById(
 const q = await kk(() => ({ teach: window.__kk.teach, fx: document.querySelectorAll('#fx > *').length }));
 await tapEl('#mStart'); await waitPlay(); await wait(300); await tapEl(`.tile[data-i="${await ansI()}"]`);
 check(q.teach === null && q.fx === 0 && (await S()).score === 1, 'Quit mid-lesson works (lesson gone at once); the next round takes taps straight away');
+// F (v0.3.7): Callum's double tap. Default settings (no ?teach, "Show counting" ON by default): every solve gets the beat and
+// the full lesson. Two taps on the correct answer 10-80 ms apart (CDP touch, and mouse), at 1x and 4x CPU: the second tap
+// does nothing (one pick, no miss, no stopAll, nothing replayed on the next board) and the beat + full lesson always play
+for (const cpu of [1, 4]) {
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
+  const pg = await ctx.newPage(); pg.on('pageerror', e => errs.push(e.message)); const cdp = await ctx.newCDPSession(pg);
+  await pg.addInitScript(() => { window.__sfxLog = []; });
+  await pg.goto(BASE + '?round=600&level=easy'); await pg.waitForFunction(() => document.fonts.status === 'loaded');
+  await pg.evaluate(() => { localStorage.removeItem('kk.lesson'); window.__stg = []; const f = () => { const g = window.__kk.teachStage; if (g && window.__stg.at(-1) !== g) window.__stg.push(g); requestAnimationFrame(f); }; requestAnimationFrame(f); });
+  if (cpu > 1) await cdp.send('Emulation.setCPUThrottlingRate', { rate: cpu });
+  const on = await pg.evaluate(() => ({ st: window.__kk.lesson, aria: document.getElementById('mLesson').getAttribute('aria-checked') }));
+  const sb = await pg.locator('#mStart').boundingBox(); await pg.touchscreen.tap(sb.x + sb.width / 2, sb.y + sb.height / 2);
+  const T = (type, x, y) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: type === 'touchEnd' ? [] : [{ x, y, id: 0 }] });
+  const rows = []; let ok = on.st === true && on.aria === 'true';
+  for (const [gap, how] of [[10, 'touch'], [25, 'touch'], [40, 'touch'], [60, 'touch'], [80, 'touch'], [10, 'mouse'], [50, 'mouse']]) {
+    await pg.waitForFunction(() => window.__kk.phase === 'play' && !window.__kk.teach, null, { timeout: 40000 }); await pg.waitForTimeout(300);
+    const i = await pg.evaluate(() => window.__kk.puzzle.nums.indexOf(window.__kk.puzzle.answer));
+    const bb = await pg.locator(`.tile[data-i="${i}"]`).boundingBox(), x = bb.x + bb.width / 2, y = bb.y + bb.height / 2;
+    const s0 = await pg.evaluate(() => { window.__stg = []; return { score: window.__kk.score, miss: window.__kk.miss, tc: window.__kk.teachCount, picks: window.__sfxLog.filter(e => ['correct', 'wrong'].includes(e[0])).length }; });
+    const tA = Date.now();
+    if (how === 'touch') { await T('touchStart', x, y); await T('touchEnd', x, y); await pg.waitForTimeout(gap); await T('touchStart', x, y); await T('touchEnd', x, y); }
+    else { await pg.mouse.click(x, y); await pg.waitForTimeout(gap); await pg.mouse.click(x, y); }
+    await pg.waitForFunction(() => window.__kk.phase === 'play' && !window.__kk.teach, null, { timeout: 40000 }); const dur = Date.now() - tA; await pg.waitForTimeout(600);
+    const s1 = await pg.evaluate(() => ({ score: window.__kk.score, miss: window.__kk.miss, tc: window.__kk.teachCount, stg: window.__stg.slice(), picks: window.__sfxLog.filter(e => ['correct', 'wrong'].includes(e[0])).length, stop: window.__sfxLog.some(e => e[0] === 'stopAll') }));
+    const good = s1.score === s0.score + 1 && s1.miss === 0 && s1.picks === s0.picks + 1 && s1.tc === s0.tc + 1 && ['connect', 'fly', 'counted', 'bond', 'clear'].every(g => s1.stg.includes(g)) && !s1.stop && dur > 5000;
+    ok = ok && good; rows.push(`${how} ${gap}ms: ${good ? 'full' : 'BAD ' + JSON.stringify(s1)} ${(dur / 1000).toFixed(1)}s`);
+  }
+  check(ok, `double tap on the answer @${cpu}x CPU (Show counting ON by default): 1 pick each, beat + full lesson every solve, nothing queued: ${rows.join('; ')}`);
+  await ctx.close();
+}
 check(errs.length === 0, 'no console errors ' + JSON.stringify(errs));
 console.log([...log, ...fails].join('\n'));
 console.log(fails.length ? `${fails.length} FAILED` : 'ALL V036 NO-SKIP CHECKS PASSED');

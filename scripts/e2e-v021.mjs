@@ -134,11 +134,12 @@ check(!(await kk(() => window.__sfxLog.some(([n]) => n === 'stopAll'))), 'lesson
 await kk(() => { window.__sfxLog = null; });
 await shot('11-skip-after');
 
-// ---------- quick solve (4th) ----------
+// ---------- quick solve (4th), Show counting OFF (v0.3.7: ON = a lesson on every solve) ----------
+await kk(() => { window.__kk.lesson = false; });
 const tc = await kk(() => window.__kk.teachCount);
 await wait(200); await tapTile(await answerIdx()); await wait(620); // v0.3.5: the sum strip fills in 0.5 s into the connect beat
 const q = await kk(() => ({ tc: window.__kk.teachCount, phase: window.__kk.phase, sum: document.getElementById('sum').textContent, fx: document.querySelectorAll('#fx .ctr').length }));
-check(q.tc === tc && q.phase === 'feedback' && /^\d+\+\d+=\d+$/.test(q.sum) && q.fx === 0, 'solve 4: connect beat + sum strip (no teaching)');
+check(q.tc === tc && q.phase === 'feedback' && /^\d+\+\d+=\d+$/.test(q.sum) && q.fx === 0, 'solve 4 with Show counting OFF: connect beat + sum strip (no teaching)');
 await shot('12-quick-solve');
 const qs = Date.now(); await waitPlay(); check(Date.now() - qs < 700, 'quick feedback (connect beat) ends at ~1 s');
 
@@ -152,17 +153,20 @@ check(wc.tilt > 0, 'Blaze tilts his head');
 await shot('13-wrong-caption');
 await wait(2000); const wcBack = await kk(() => document.getElementById('sum').className);
 check(/\b(ph|hint)\b/.test(wcBack), 'caption clears after 2 s, strip back to ' + wcBack);
+await kk(() => { window.__kk.lesson = true; });
 const tc2 = await kk(() => window.__kk.teachCount);
 await tapTile(await answerIdx()); await wait(1150); // the lesson starts after the 1 s connect beat
 check((await kk(() => window.__kk.teachCount)) === tc2 + 1 && (await kk(() => document.querySelectorAll('.tile.bad').length)) === 0, 'correct after a mistake plays the full solve, no coral left');
 await stage('fly'); await tapAnywhere(); await waitPlay();
 
 // ---------- streak milestone x5 => full ----------
+await kk(() => { window.__kk.lesson = false; });
 for (let k = 0; k < 3; k++) { await wait(150); await tapTile(await answerIdx()); await waitPlay(); }
+await kk(() => { window.__kk.lesson = true; });
 const tc3 = await kk(() => window.__kk.teachCount);
 await wait(150); await tapTile(await answerIdx()); await wait(1150);
 const ms5 = await kk(() => ({ streak: window.__kk.streak, tc: window.__kk.teachCount }));
-check(ms5.streak === 5 && ms5.tc === tc3 + 1, 'streak x5 milestone plays the full solve');
+check(ms5.streak === 5 && ms5.tc === tc3 + 1, 'streak x5 with Show counting ON plays the full solve');
 await stage('fly'); await tapAnywhere(); await waitPlay();
 
 // ---------- chip replay ----------

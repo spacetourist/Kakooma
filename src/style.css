@@ -59,7 +59,7 @@ button { font: inherit; color: inherit; border: 0; background: none; padding: 0;
 #play[data-mode="menu"] .streak-pill { visibility: hidden; }
 
 /* board */
-.board { position: relative; flex: 0 0 auto; height: clamp(170px, calc(100dvh - 660px), 400px); touch-action: manipulation; }
+.board { position: relative; flex: 0 0 auto; height: clamp(150px, calc(100dvh - 694px), 400px); /* menu preview; v0.3.7: 34 px shorter to make room for the Show counting switch */ touch-action: manipulation; }
 #play[data-mode="game"] .board { height: clamp(260px, calc(100dvh - 545px), 420px); }
 .outline { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
 .outline polygon { fill: none; stroke: var(--line); stroke-width: 1.5; stroke-linejoin: round; }
@@ -105,6 +105,7 @@ button { font: inherit; color: inherit; border: 0; background: none; padding: 0;
 /* below-board */
 .below { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; padding-top: 22px; }
 .below.game-only { padding-top: 16px; }
+.below.menu-only { padding-top: 12px; } .below.menu-only .foot { padding-top: 14px; } /* v0.3.7: room for the Show counting switch */
 .below > .lbl { margin-bottom: 8px; }
 .picker { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; padding: 6px; background: var(--card); border-radius: var(--r-pill); box-shadow: var(--shadow); }
 .picker button { height: 52px; border-radius: 13px; display: grid; place-items: center; color: var(--ink); transition: background-color .15s, color .15s; }
@@ -119,9 +120,16 @@ button { font: inherit; color: inherit; border: 0; background: none; padding: 0;
 .levels.sm { margin-top: 8px; } .levels.sm button { height: 52px; } .levels.sm button span { font-size: 22px; }
 .lbl2 { margin-top: 14px; }
 .picker button.off { color: #c9cfdf; }
+/* v0.3.7 "Show counting" switch: a card row like the pickers, the whole row is the tap target (52 px) */
+.lessonsw { flex: 0 0 auto; margin-top: 10px; height: 52px; width: 100%; padding: 0 12px 0 18px; display: flex; align-items: center; justify-content: space-between; gap: 12px; background: var(--card); border-radius: var(--r-pill); box-shadow: var(--shadow); color: var(--ink); -webkit-tap-highlight-color: transparent; }
+.lessonsw .lt { font: 800 17px/1 var(--f-ui); letter-spacing: .02em; }
+.lessonsw .sw { position: relative; flex: 0 0 56px; width: 56px; height: 34px; border-radius: 17px; background: var(--line); transition: background-color .15s; }
+.lessonsw .sw i { position: absolute; left: 3px; top: 3px; width: 28px; height: 28px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(29,35,64,.25); transition: transform .15s; }
+.lessonsw.on .sw { background: var(--blue); } .lessonsw.on .sw i { transform: translateX(22px); }
+.lessonsw:active { transform: translateY(1px); }
 .best .note-in { color: var(--ink); font-size: 13px; line-height: 1.25; }
 .lvtag { display: inline-block; padding: 3px 9px; margin-right: 4px; border-radius: 10px; background: var(--blue); color: #fff; font: 800 12px/1.2 var(--f-ui); letter-spacing: .04em; text-transform: uppercase; vertical-align: 1px; }
-.best { margin-top: 14px; text-align: center; font: 700 15px/1 var(--f-ui); color: var(--muted); min-height: 15px; }
+.best { margin-top: 10px; text-align: center; font: 700 15px/1 var(--f-ui); color: var(--muted); min-height: 15px; }
 .best b { color: var(--ink); }
 .lblrow { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; }
 .lblrow b { font: 700 28px/1 var(--f-display); }

@@ -73,7 +73,7 @@ async function quickShower(base, shot) {
 }
 const qa = await quickShower(BASE, `${SHOTS}v0351-fix2-after-quick-shower-1600.png`);
 const lastShower = qa.c.filter(e => e[0] === 'shower').at(-1)?.[1] - (await kk(() => 0));
-check(qa.c.filter(e => e[0] === 'shower').length === 6 && qa.nb >= 1950 && qa.nb < 2300, `streak 3, no lesson: shower during the beat, next board only at ${qa.nb} ms (last burst at ~1.5 s + 0.3 s)`);
+check(qa.c.filter(e => /^shower/.test(e[0])).length === 6 && qa.nb >= 1950 && qa.nb < 2300, `streak 3, no lesson: shower during the beat, next board only at ${qa.nb} ms (last burst at ~1.5 s + 0.3 s; v0.3.7: the previous solve's burst may still be falling, so the first wave can be capped: ${qa.c.map(e => e[0]).join(',')})`);
 // ---------- fix 1: filled sum held to the handover (0.95 s) ----------
 async function sumAt(base, shot) {
   await open(base, '?round=600&level=easy&teach=quick');
